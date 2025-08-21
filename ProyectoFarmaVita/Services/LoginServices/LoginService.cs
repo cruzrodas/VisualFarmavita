@@ -22,89 +22,224 @@ namespace ProyectoFarmaVita.Services.LoginServices
 
         public async Task<RespuestaAutenticacion> Login(CredencialesUsuario credencialesUsuario)
         {
+            Console.WriteLine("🚀 ===== INICIO LOGIN DEBUG =====");
+            Console.WriteLine($"📧 Email recibido: '{credencialesUsuario.Email}'");
+            Console.WriteLine($"🔑 Password recibido: '{credencialesUsuario.Password}'");
+
             using var dbContext = await _dbContextFactory.CreateDbContextAsync();
 
-            var fechaHoy = DateTime.Now;
             var respuestaAutenticacion = new RespuestaAutenticacion();
 
-            // Buscar persona por email que esté activa
-            var persona = await dbContext.Persona
-                .Include(p => p.IdRoolNavigation) // Incluir el rol
-                .FirstOrDefaultAsync(p => p.Email == credencialesUsuario.Email && p.Activo == true);
-
-            if (persona == null)
+            try
             {
-                respuestaAutenticacion.Error = "Login incorrecto";
+                // 1. Verificar conexión a BD
+                Console.WriteLine("🔍 Verificando conexión a BD...");
+                var canConnect = await dbContext.Database.CanConnectAsync();
+                Console.WriteLine($"🔗 Conexión BD: {canConnect}");
+
+                if (!canConnect)
+                {
+                    Console.WriteLine("❌ No se puede conectar a la base de datos");
+                    respuestaAutenticacion.Error = "Error de conexión a la base de datos";
+                    return respuestaAutenticacion;
+                }
+
+                // 2. Buscar usuario por email
+                Console.WriteLine($"🔍 Buscando usuario con email: {credencialesUsuario.Email}");
+
+                var persona = await dbContext.Persona
+                    .Include(p => p.IdRoolNavigation)
+                    .Where(p => p.Email == credencialesUsuario.Email)
+                    .FirstOrDefaultAsync();
+
+                if (persona == null)
+                {
+                    Console.WriteLine("❌ Usuario no encontrado en la base de datos");
+                    respuestaAutenticacion.Error = "Usuario no encontrado";
+                    return respuestaAutenticacion;
+                }
+
+                Console.WriteLine($"✅ Usuario encontrado:");
+                Console.WriteLine($"   - ID: {persona.IdPersona}");
+                Console.WriteLine($"   - Nombre: {persona.Nombre} {persona.Apellido}");
+                Console.WriteLine($"   - Email: {persona.Email}");
+                Console.WriteLine($"   - Activo: {persona.Activo}");
+                Console.WriteLine($"   - Contraseña almacenada: '{persona.Contraseña}'");
+                Console.WriteLine($"   - Rol: {persona.IdRoolNavigation?.TipoRol ?? "Sin rol"}");
+
+                // 3. Verificar si está activo
+                if (persona.Activo != true)
+                {
+                    Console.WriteLine("❌ Usuario inactivo");
+                    respuestaAutenticacion.Error = "Usuario inactivo";
+                    return respuestaAutenticacion;
+                }
+
+                // 4. Verificar contraseña
+                Console.WriteLine("🔍 Verificando contraseña...");
+
+                // Generar hash de la contraseña ingresada
+                string hashedInputPassword = HashPassword(credencialesUsuario.Password);
+                Console.WriteLine($"🔑 Contraseña ingresada hasheada: '{hashedInputPassword}'");
+
+                // Comparaciones
+                bool hashMatch = persona.Contraseña == hashedInputPassword;
+                bool plainTextMatch = persona.Contraseña == credencialesUsuario.Password;
+
+                Console.WriteLine($"🔍 Coincide con hash: {hashMatch}");
+                Console.WriteLine($"🔍 Coincide texto plano: {plainTextMatch}");
+
+                if (hashMatch || plainTextMatch)
+                {
+                    Console.WriteLine("✅ Contraseña correcta");
+
+                    // 5. Construir token
+                    Console.WriteLine("🎟️ Construyendo token...");
+                    respuestaAutenticacion = ConstruirToken(persona);
+
+                    if (!string.IsNullOrEmpty(respuestaAutenticacion.Token))
+                    {
+                        Console.WriteLine("✅ Token generado exitosamente");
+                        Console.WriteLine($"🎟️ Token: {respuestaAutenticacion.Token.Substring(0, 50)}...");
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ Error al generar token");
+                        respuestaAutenticacion.Error = "Error al generar token";
+                    }
+
+                    return respuestaAutenticacion;
+                }
+                else
+                {
+                    Console.WriteLine("❌ Contraseña incorrecta");
+                    respuestaAutenticacion.Error = "Credenciales incorrectas";
+                    return respuestaAutenticacion;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"💥 ERROR CRÍTICO: {ex.Message}");
+                Console.WriteLine($"💥 Stack Trace: {ex.StackTrace}");
+                respuestaAutenticacion.Error = $"Error interno: {ex.Message}";
                 return respuestaAutenticacion;
             }
-
-            // Verificar contraseña
-            if (VerifyPassword(credencialesUsuario.Password, persona.Contraseña))
+            finally
             {
-                respuestaAutenticacion = ConstruirToken(persona);
-                return respuestaAutenticacion;
+                Console.WriteLine("🏁 ===== FIN LOGIN DEBUG =====");
             }
-            else
+        }
+
+        private string HashPassword(string password)
+        {
+            try
             {
-                respuestaAutenticacion.Error = "Login incorrecto";
-                return respuestaAutenticacion;
+                using var sha256 = SHA256.Create();
+                var bytes = Encoding.UTF8.GetBytes(password);
+                var hash = sha256.ComputeHash(bytes);
+                return Convert.ToBase64String(hash);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
+                return string.Empty;
             }
         }
 
         private bool VerifyPassword(string plainTextPassword, string hashedPassword)
         {
-            using var sha256 = SHA256.Create();
-            var bytes = Encoding.UTF8.GetBytes(plainTextPassword);
-            var hash = sha256.ComputeHash(bytes);
-            var enteredPasswordHash = Convert.ToBase64String(hash);
+            try
+            {
+                using var sha256 = SHA256.Create();
+                var bytes = Encoding.UTF8.GetBytes(plainTextPassword);
+                var hash = sha256.ComputeHash(bytes);
+                var enteredPasswordHash = Convert.ToBase64String(hash);
 
-            return hashedPassword == enteredPasswordHash;
+                return hashedPassword == enteredPasswordHash;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
+                return false;
+            }
         }
 
         private RespuestaAutenticacion ConstruirToken(Persona persona)
         {
-            List<Claim> claims = new List<Claim>();
-
-            // Agregar rol si existe
-            if (persona.IdRoolNavigation != null)
+            try
             {
-                claims.Add(new Claim(ClaimTypes.Role, persona.IdRoolNavigation.TipoRol ?? "Usuario"));
+                Console.WriteLine("🔧 Iniciando construcción de token...");
+
+                List<Claim> claims = new List<Claim>();
+
+                // Agregar rol si existe
+                if (persona.IdRoolNavigation != null)
+                {
+                    string rol = persona.IdRoolNavigation.TipoRol ?? "Usuario";
+                    claims.Add(new Claim(ClaimTypes.Role, rol));
+                    Console.WriteLine($"👤 Rol agregado: {rol}");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ Sin rol asignado");
+                }
+
+                // Agregar email
+                claims.Add(new Claim(ClaimTypes.Email, persona.Email ?? ""));
+                Console.WriteLine($"📧 Email agregado: {persona.Email}");
+
+                // Agregar nombre completo
+                string nombreCompleto = $"{persona.Nombre} {persona.Apellido}".Trim();
+                claims.Add(new Claim("nombre", nombreCompleto));
+                Console.WriteLine($"👤 Nombre agregado: {nombreCompleto}");
+
+                // Agregar ID de persona
+                claims.Add(new Claim("idPersona", persona.IdPersona.ToString()));
+                Console.WriteLine($"🆔 ID Persona agregado: {persona.IdPersona}");
+
+                // Agregar ID de sucursal si existe
+                if (persona.IdSucursal.HasValue)
+                {
+                    claims.Add(new Claim("idSucursal", persona.IdSucursal.Value.ToString()));
+                    Console.WriteLine($"🏢 ID Sucursal agregado: {persona.IdSucursal.Value}");
+                }
+
+                // Verificar llave JWT
+                if (string.IsNullOrEmpty(llavejwt))
+                {
+                    Console.WriteLine("❌ Llave JWT no configurada");
+                    return new RespuestaAutenticacion { Error = "Error de configuración JWT" };
+                }
+
+                Console.WriteLine($"🔑 Llave JWT configurada (longitud: {llavejwt.Length})");
+
+                var keybuffer = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(llavejwt));
+                DateTime expireTime = DateTime.Now.AddMinutes(60);
+
+                JwtSecurityToken token = new JwtSecurityToken(
+                    issuer: null,
+                    audience: null,
+                    claims: claims,
+                    expires: expireTime,
+                    signingCredentials: new SigningCredentials(keybuffer, SecurityAlgorithms.HmacSha256)
+                );
+
+                var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+                Console.WriteLine("✅ Token JWT creado exitosamente");
+
+                return new RespuestaAutenticacion()
+                {
+                    Token = tokenString,
+                    Expiration = expireTime,
+                    Email = persona.Email
+                };
             }
-
-            // Agregar email
-            claims.Add(new Claim(ClaimTypes.Email, persona.Email ?? ""));
-
-            // Agregar nombre completo
-            string nombreCompleto = $"{persona.Nombre} {persona.Apellido}".Trim();
-            claims.Add(new Claim("nombre", nombreCompleto));
-
-            // Agregar ID de persona
-            claims.Add(new Claim("idPersona", persona.IdPersona.ToString()));
-
-            // Agregar ID de sucursal si existe
-            if (persona.IdSucursal.HasValue)
+            catch (Exception ex)
             {
-                claims.Add(new Claim("idSucursal", persona.IdSucursal.Value.ToString()));
+                Console.WriteLine($"❌ Error al construir token: {ex.Message}");
+                Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+                return new RespuestaAutenticacion { Error = $"Error al generar token: {ex.Message}" };
             }
-
-            // IdentityModelEventSource.ShowPII = true;
-            var keybuffer = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(llavejwt));
-            DateTime expireTime = DateTime.Now.AddMinutes(60);
-
-            JwtSecurityToken token = new JwtSecurityToken(
-                issuer: null,
-                audience: null,
-                claims: claims,
-                expires: expireTime,
-                signingCredentials: new SigningCredentials(keybuffer, SecurityAlgorithms.HmacSha256)
-            );
-
-            return new RespuestaAutenticacion()
-            {
-                Token = new JwtSecurityTokenHandler().WriteToken(token),
-                Expiration = expireTime,
-                Email = persona.Email
-            };
         }
 
         public async Task<RespuestaAutenticacion> RenovarToken(string email)

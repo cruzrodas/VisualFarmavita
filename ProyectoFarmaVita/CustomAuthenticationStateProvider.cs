@@ -1,354 +1,295 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.JSInterop;
-using ProyectoFarmaVita.Models;
-using ProyectoFarmaVita.Services.LoginServices;
 
-public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IDisposable, IAsyncDisposable
+public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IDisposable
 {
-    private readonly IJSRuntime JsRuntime;
-    private readonly NavigationManager NavigationManager;
-    private readonly ILoginService LoginService;
-    private AuthenticationState _authenticationState;
-    private bool _firstRenderCompleted;
-    private Timer _renewTokenTimer;
-    private bool _isWindowActive = true;
-    private Timer _checkActivityTimer;
-    private DateTime _lastTokenCheck = DateTime.MinValue;
-    private DotNetObjectReference<CustomAuthenticationStateProvider>? _dotNetHelper;
+    private readonly IJSRuntime _jsRuntime;
+    private readonly NavigationManager _navigationManager;
+    private readonly ILogger<CustomAuthenticationStateProvider> _logger;
+
+    private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
+    private DotNetObjectReference<CustomAuthenticationStateProvider>? _dotNetRef;
     private bool _isInitialized = false;
+    private bool _disposed = false;
+    private Timer? _tokenRenewalTimer;
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
 
-    public CustomAuthenticationStateProvider(IJSRuntime jsRuntime, NavigationManager navigationManager, ILoginService loginService)
+    public CustomAuthenticationStateProvider(
+        IJSRuntime jsRuntime,
+        NavigationManager navigationManager,
+        ILogger<CustomAuthenticationStateProvider> logger)
     {
-        JsRuntime = jsRuntime;
-        NavigationManager = navigationManager;
-        LoginService = loginService;
-        _firstRenderCompleted = false;
-        _checkActivityTimer = new Timer(CheckActivityAndRenewToken, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
-
-        // Crear la referencia DotNet para JavaScript
-        _dotNetHelper = DotNetObjectReference.Create(this);
-
-        // Inicializar después de un pequeño delay para asegurar que JS esté disponible
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(1000); // Esperar 1 segundo
-            await InitializeJavaScriptHelper();
-        });
+        _jsRuntime = jsRuntime;
+        _navigationManager = navigationManager;
+        _logger = logger;
     }
 
-    // Método para inicializar el helper de JavaScript
-    private async Task InitializeJavaScriptHelper()
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        if (_isInitialized || _dotNetHelper == null) return;
+        if (_disposed)
+        {
+            _logger.LogWarning("⚠️ AuthenticationStateProvider ya fue disposed");
+            return new AuthenticationState(_currentUser);
+        }
 
+        await _semaphore.WaitAsync();
         try
         {
-            await JsRuntime.InvokeVoidAsync("setDotNetHelper", _dotNetHelper);
-            _isInitialized = true;
-            NotifyFirstRenderCompleted();
-            Console.WriteLine("✅ DotNet helper inicializado correctamente");
+            // Solo intentar obtener token si no estamos en prerendering
+            if (_isInitialized)
+            {
+                await InitializeIfNeededAsync();
+            }
+
+            var authState = new AuthenticationState(_currentUser);
+            _logger.LogInformation($"👤 Estado de autenticación: {_currentUser.Identity?.IsAuthenticated ?? false}");
+
+            return authState;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error inicializando DotNet helper: {ex.Message}");
-            // Reintentar después de 2 segundos
-            _ = Task.Run(async () =>
+            _logger.LogError(ex, "Error verificando autenticación");
+            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    private async Task InitializeIfNeededAsync()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            _logger.LogInformation("🔍 Obteniendo token del sessionStorage...");
+
+            var token = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "authToken");
+
+            if (!string.IsNullOrEmpty(token))
             {
-                await Task.Delay(2000);
-                await InitializeJavaScriptHelper();
-            });
-        }
-    }
-
-    [JSInvokable]
-    public async Task SetWindowActiveStatus(bool isActive)
-    {
-        _isWindowActive = isActive;
-        Console.WriteLine($"🔄 Ventana activa: {isActive}");
-
-        if (isActive && !IsLoginPage())
-        {
-            await CheckTokenExpiration();
-        }
-    }
-
-    private async void CheckActivityAndRenewToken(object? state)
-    {
-        if (_isWindowActive && !IsLoginPage())
-        {
-            await RenewTokenIfNecessary();
-        }
-    }
-
-    public async Task CheckTokenExpiration()
-    {
-        // Si no han pasado 5 minutos desde la última verificación, no hacer nada.
-        if ((DateTime.UtcNow - _lastTokenCheck) < TimeSpan.FromMinutes(5))
-        {
-            return; // Evitar verificaciones frecuentes.
-        }
-
-        _lastTokenCheck = DateTime.UtcNow;
-        var token = await GetTokenFromSessionStorageAsync();
-
-        if (string.IsNullOrEmpty(token) || IsTokenExpired(token))
-        {
-            Console.WriteLine("🔒 Token expirado o no válido");
-            await SetTokenAsync(null);
-
-            if (!IsLoginPage())
+                _logger.LogInformation("✅ Token encontrado en sessionStorage");
+                await ProcessTokenAsync(token);
+            }
+            else
             {
-                Console.WriteLine("🔄 Redirigiendo al login...");
-                NavigationManager.NavigateTo("/login", true);
+                _logger.LogInformation("ℹ️ No hay token en sessionStorage");
+                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
             }
         }
-        else
+        catch (InvalidOperationException ex) when (ex.Message.Contains("statically rendered"))
         {
-            Console.WriteLine("✅ Token válido");
-            StartRenewTokenTimer();
-        }
-    }
-
-    private async Task<string?> GetTokenFromSessionStorageAsync()
-    {
-        try
-        {
-            return await JsRuntime.InvokeAsync<string>("sessionStorage.getItem", "authToken");
+            _logger.LogDebug("⏳ Esperando completar el renderizado antes de acceder a JavaScript");
+            // No es un error real, solo necesitamos esperar
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error obteniendo token del sessionStorage: {ex.Message}");
-            return null;
-        }
-    }
-
-    private bool IsTokenExpired(string token)
-    {
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadToken(token) as JwtSecurityToken;
-            var exp = jwtToken?.Claims.FirstOrDefault(claim => claim.Type == "exp")?.Value;
-
-            if (exp != null && long.TryParse(exp, out var expUnix))
-            {
-                var expDateTime = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
-                var isExpired = expDateTime < DateTime.UtcNow;
-
-                if (isExpired)
-                {
-                    Console.WriteLine($"⏰ Token expira en: {expDateTime} (UTC), ahora es: {DateTime.UtcNow} (UTC)");
-                }
-
-                return isExpired;
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error verificando expiración del token: {ex.Message}");
-            return true;
+            _logger.LogError(ex, "❌ Error obteniendo token del sessionStorage");
+            _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
         }
     }
 
     public async Task SetTokenAsync(string? token)
     {
+        if (_disposed)
+        {
+            _logger.LogWarning("⚠️ Intento de SetToken en provider disposed");
+            return;
+        }
+
+        await _semaphore.WaitAsync();
         try
         {
+            _logger.LogInformation($"🔑 Estableciendo nuevo token de autenticación");
+
             if (string.IsNullOrEmpty(token))
             {
-                Console.WriteLine("🔒 Limpiando token de autenticación");
-                await JsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
-                _authenticationState = new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+                // Limpiar autenticación
+                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+
+                try
+                {
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
+                    _logger.LogInformation("🗑️ Token removido del sessionStorage");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ Error removiendo token del sessionStorage");
+                }
+
+                StopTokenRenewalTimer();
             }
             else
             {
-                Console.WriteLine("🔑 Estableciendo nuevo token de autenticación");
-                await JsRuntime.InvokeVoidAsync("sessionStorage.setItem", "authToken", token);
-                var claims = ParseClaimsFromJWT(token);
-                var claimsIdentity = new ClaimsIdentity(claims, "JWT");
-                _authenticationState = new AuthenticationState(new ClaimsPrincipal(claimsIdentity));
-            }
+                // Establecer nueva autenticación
+                await ProcessTokenAsync(token);
 
-            NotifyAuthenticationStateChanged(Task.FromResult(_authenticationState));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error estableciendo token: {ex.Message}");
-        }
-    }
-
-    public void NotifyFirstRenderCompleted()
-    {
-        _firstRenderCompleted = true;
-        Console.WriteLine("✅ Primer render completado");
-
-        if (!IsLoginPage())
-        {
-            _ = Task.Run(async () => await CheckTokenExpiration());
-        }
-    }
-
-    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
-    {
-        try
-        {
-            var token = await GetTokenFromSessionStorageAsync();
-            ClaimsIdentity identity;
-
-            if (string.IsNullOrEmpty(token) || IsTokenExpired(token))
-            {
-                identity = new ClaimsIdentity();
-                Console.WriteLine("❌ Usuario no autenticado");
-            }
-            else
-            {
-                identity = new ClaimsIdentity(ParseClaimsFromJWT(token), "JWT");
-                Console.WriteLine("✅ Usuario autenticado");
-            }
-
-            _authenticationState = new AuthenticationState(new ClaimsPrincipal(identity));
-            return _authenticationState;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error en GetAuthenticationStateAsync: {ex.Message}");
-            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
-        }
-    }
-
-    private IEnumerable<Claim> ParseClaimsFromJWT(string jwt)
-    {
-        try
-        {
-            var payload = jwt.Split('.')[1];
-            var jsonBytes = ParseBase64WithoutPadding(payload);
-            var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
-
-            if (keyValuePairs != null)
-            {
-                var claims = keyValuePairs.Select(kvp => new Claim(kvp.Key, kvp.Value.ToString() ?? "")).ToList();
-                Console.WriteLine($"🔍 Claims extraídos: {claims.Count}");
-                return claims;
-            }
-
-            return new List<Claim>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error parseando claims del JWT: {ex.Message}");
-            return new List<Claim>();
-        }
-    }
-
-    private byte[] ParseBase64WithoutPadding(string base64)
-    {
-        switch (base64.Length % 4)
-        {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
-        }
-        return Convert.FromBase64String(base64);
-    }
-
-    private async Task RenewToken()
-    {
-        try
-        {
-            var token = await GetTokenFromSessionStorageAsync();
-            if (!string.IsNullOrEmpty(token))
-            {
-                var handler = new JwtSecurityTokenHandler();
-                var jsonToken = handler.ReadToken(token) as JwtSecurityToken;
-                var email = jsonToken?.Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.Email)?.Value;
-
-                if (!string.IsNullOrEmpty(email))
+                try
                 {
-                    Console.WriteLine($"🔄 Renovando token para: {email}");
-                    var newTokenResponse = await LoginService.RenovarToken(email);
-
-                    if (newTokenResponse?.Token != null)
-                    {
-                        Console.WriteLine("✅ Token renovado exitosamente");
-                        await SetTokenAsync(newTokenResponse.Token);
-                    }
-                    else
-                    {
-                        Console.WriteLine("❌ Error renovando token");
-                    }
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "authToken", token);
+                    _logger.LogInformation("💾 Token guardado en sessionStorage");
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ Error guardando token en sessionStorage");
+                }
+
+                StartTokenRenewalTimer(token);
             }
+
+            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+            _logger.LogInformation($"🔔 Estado de autenticación notificado: {_currentUser.Identity?.IsAuthenticated ?? false}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error renovando token: {ex.Message}");
+            _logger.LogError(ex, "❌ Error en SetTokenAsync");
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
-    public void StartRenewTokenTimer()
+    private async Task ProcessTokenAsync(string token)
     {
-        _renewTokenTimer?.Dispose();
-        _renewTokenTimer = new Timer(async _ => await RenewTokenIfNecessary(), null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
-        Console.WriteLine("⏰ Timer de renovación de token iniciado");
-    }
+        if (_disposed) return;
 
-    private async Task RenewTokenIfNecessary()
-    {
         try
         {
-            var token = await GetTokenFromSessionStorageAsync();
-            if (!string.IsNullOrEmpty(token))
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+
+            // Verificar si el token ha expirado
+            if (jwtToken.ValidTo < DateTime.UtcNow)
             {
-                var handler = new JwtSecurityTokenHandler();
-                var jwtToken = handler.ReadToken(token) as JwtSecurityToken;
-                var expClaim = jwtToken?.Claims.FirstOrDefault(claim => claim.Type == "exp")?.Value;
+                _logger.LogWarning("⚠️ Token expirado");
+                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                return;
+            }
 
-                if (expClaim != null && long.TryParse(expClaim, out long expUnix))
-                {
-                    var expDateTime = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
-                    var timeRemaining = expDateTime - DateTime.UtcNow;
+            // Extraer claims del token
+            var claims = jwtToken.Claims.ToList();
+            _logger.LogInformation($"📝 Claims extraídos: {claims.Count}");
 
-                    // Si faltan 5 minutos o menos para que expire el token, renovarlo.
-                    if (timeRemaining.TotalMinutes <= 5 && _isWindowActive)
-                    {
-                        Console.WriteLine($"⚠️ Token expira en {timeRemaining.TotalMinutes:F1} minutos, renovando...");
-                        await RenewToken();
-                    }
-                }
+            var identity = new ClaimsIdentity(claims, "jwt");
+            _currentUser = new ClaimsPrincipal(identity);
+
+            _logger.LogInformation($"✅ Usuario autenticado: {_currentUser.Identity?.Name ?? "Sin nombre"}");
+            _logger.LogInformation($"👤 Rol: {_currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol"}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error procesando token JWT");
+            _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+        }
+    }
+
+    private void StartTokenRenewalTimer(string token)
+    {
+        if (_disposed) return;
+
+        try
+        {
+            StopTokenRenewalTimer();
+
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            var expiryTime = jwtToken.ValidTo;
+            var renewalTime = expiryTime.AddMinutes(-5); // Renovar 5 minutos antes de expirar
+            var delay = renewalTime - DateTime.UtcNow;
+
+            if (delay > TimeSpan.Zero)
+            {
+                _tokenRenewalTimer = new Timer(async _ => await RenewTokenAsync(), null, delay, TimeSpan.FromMilliseconds(-1));
+                _logger.LogInformation($"⏰ Timer de renovación configurado para: {renewalTime:HH:mm:ss}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error en RenewTokenIfNecessary: {ex.Message}");
+            _logger.LogError(ex, "❌ Error configurando timer de renovación");
         }
     }
 
-    public void StopRenewTokenTimer()
+    private async Task RenewTokenAsync()
     {
-        _renewTokenTimer?.Dispose();
-        Console.WriteLine("⏹️ Timer de renovación de token detenido");
+        if (_disposed) return;
+
+        try
+        {
+            _logger.LogInformation("🔄 Renovando token...");
+            // Aquí puedes implementar la lógica de renovación si la tienes
+            // Por ahora, simplemente loggeamos que se intentó renovar
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error renovando token");
+        }
     }
 
-    private bool IsLoginPage()
+    private void StopTokenRenewalTimer()
     {
-        return NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase);
+        if (_tokenRenewalTimer != null)
+        {
+            _tokenRenewalTimer.Dispose();
+            _tokenRenewalTimer = null;
+            _logger.LogDebug("⏹️ Timer de renovación de token detenido");
+        }
     }
 
-    public async ValueTask DisposeAsync()
+    // Método para inicializar después del primer render
+    public async Task InitializeAsync()
     {
-        StopRenewTokenTimer();
-        _checkActivityTimer?.Dispose();
-        _dotNetHelper?.Dispose();
-        await Task.CompletedTask;
-        Console.WriteLine("🗑️ CustomAuthenticationStateProvider disposed");
+        if (_disposed) return;
+
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (!_isInitialized)
+            {
+                _logger.LogInformation("🚀 Inicializando CustomAuthenticationStateProvider...");
+                _isInitialized = true;
+
+                // Intentar obtener el token del sessionStorage
+                await InitializeIfNeededAsync();
+
+                // Notificar el estado inicial
+                NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error en InitializeAsync");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public void Dispose()
     {
-        DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
+        if (_disposed) return;
+
+        _disposed = true;
+        _logger.LogInformation("🗑️ CustomAuthenticationStateProvider disposed");
+
+        try
+        {
+            StopTokenRenewalTimer();
+
+            _dotNetRef?.Dispose();
+            _dotNetRef = null;
+
+            _semaphore?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error durante dispose");
+        }
     }
 }

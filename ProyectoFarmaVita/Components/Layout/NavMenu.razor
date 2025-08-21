@@ -42,8 +42,8 @@
             </NavLink>
         </div>
 
-        <!-- GESTIÓN DE PERSONAS - DESPLEGABLE (Solo Administradores) -->
-        <AuthorizeView Roles="Administrador">
+        <!-- GESTIÓN DE PERSONAS - DESPLEGABLE (Solo Administradores y Gerentes) -->
+        <AuthorizeView Roles="Administrador,Gerente">
             <div class="nav-item px-3">
                 <div class="nav-section-toggle" onclick="toggleSection(event, 'personasSection')">
                     <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span>
@@ -66,8 +66,8 @@
             </div>
         </AuthorizeView>
 
-        <!-- GESTIÓN LABORAL - DESPLEGABLE (Solo Administradores) -->
-        <AuthorizeView Roles="Administrador">
+        <!-- GESTIÓN LABORAL - DESPLEGABLE (Solo Administradores y Gerentes) -->
+        <AuthorizeView Roles="Administrador,Gerente">
             <div class="nav-item px-3">
                 <div class="nav-section-toggle" onclick="toggleSection(event, 'laboralSection')">
                     <span class="bi bi-clock-fill-nav-menu" aria-hidden="true"></span>
@@ -87,8 +87,8 @@
             </div>
         </AuthorizeView>
 
-        <!-- UBICACIÓN GEOGRÁFICA - DESPLEGABLE (Solo Administradores) -->
-        <AuthorizeView Roles="Administrador">
+        <!-- UBICACIÓN GEOGRÁFICA - DESPLEGABLE (Solo Administradores y Gerentes) -->
+        <AuthorizeView Roles="Administrador,Gerente">
             <div class="nav-item px-3">
                 <div class="nav-section-toggle" onclick="toggleSection(event, 'ubicacionSection')">
                     <span class="bi bi-map-fill-nav-menu" aria-hidden="true"></span>
@@ -111,8 +111,8 @@
             </div>
         </AuthorizeView>
 
-        <!-- GESTIÓN DE PRODUCTOS - DESPLEGABLE (Administradores y Farmacéuticos) -->
-        <AuthorizeView Roles="Administrador,Farmaceutico">
+        <!-- GESTIÓN DE PRODUCTOS - DESPLEGABLE (Administradores, Gerentes y Farmacéuticos) -->
+        <AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
             <div class="nav-item px-3">
                 <div class="nav-section-toggle" onclick="toggleSection(event, 'productosSection')">
                     <span class="bi bi-capsule-pill-nav-menu" aria-hidden="true"></span>
@@ -153,11 +153,47 @@
             </div>
         </AuthorizeView>
 
-        <!-- VENTAS - PRÓXIMAMENTE (Solo Farmacéuticos y Cajeros) -->
-        <AuthorizeView Roles="Farmaceutico,Cajero">
+        <!-- VENTAS - DESPLEGABLE (Farmacéuticos, Cajeros y Vendedores) -->
+        <AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
             <div class="nav-item px-3">
-                <div class="nav-link disabled" style="opacity: 0.5;">
-                    <span class="bi bi-cart-fill" aria-hidden="true"></span> Ventas (Próximamente)
+                <div class="nav-section-toggle" onclick="toggleSection(event, 'ventasSection')">
+                    <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span>
+                    Ventas
+                    <span class="bi bi-chevron-down collapse-arrow" id="ventasArrow"></span>
+                </div>
+                <div class="nav-sub-section" id="ventasSection">
+                    <div class="nav-sub-menu">
+                        <NavLink class="nav-link nav-sub-link" href="ventas">
+                            <span class="bi bi-cart-fill" aria-hidden="true"></span> Realizar Venta
+                        </NavLink>
+                        <NavLink class="nav-link nav-sub-link" href="historial-ventas">
+                            <span class="bi bi-clock-history" aria-hidden="true"></span> Historial de Ventas
+                        </NavLink>
+                    </div>
+                </div>
+            </div>
+        </AuthorizeView>
+
+        <!-- REPORTES - DESPLEGABLE (Solo Administradores y Gerentes) -->
+        <AuthorizeView Roles="Administrador,Gerente">
+            <div class="nav-item px-3">
+                <div class="nav-section-toggle" onclick="toggleSection(event, 'reportesSection')">
+                    <span class="bi bi-graph-up-arrow" aria-hidden="true"></span>
+                    Reportes
+                    <span class="bi bi-chevron-down collapse-arrow" id="reportesArrow"></span>
+                </div>
+                <div class="nav-sub-section" id="reportesSection">
+                    <div class="nav-sub-menu">
+                        <NavLink class="nav-link nav-sub-link" href="reporte-ventas">
+                            <span class="bi bi-bar-chart-fill" aria-hidden="true"></span> Reporte de Ventas
+                        </NavLink>
+                        <NavLink class="nav-link nav-sub-link" href="reporte-inventario">
+                            <span class="bi bi-boxes" aria-hidden="true"></span> Reporte de Inventario
+                        </NavLink>
+                        <NavLink class="nav-link nav-sub-link" href="reporte-usuarios">
+                            <span class="bi bi-people" aria-hidden="true"></span> Reporte de Usuarios
+                        </NavLink>
+                    </div>
                 </div>
             </div>
         </AuthorizeView>
@@ -165,54 +201,6 @@
 </div>
 
 <style>
-    /* Estilos para el menú desplegable */
-    .nav-section-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem 1rem;
-        color: #d7d7d7;
-        text-decoration: none;
-        cursor: pointer;
-        border: none;
-        background: transparent;
-        width: 100%;
-        transition: all 0.3s ease;
-        user-select: none;
-    }
-
-        .nav-section-toggle:hover {
-            color: #ffffff;
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-    .collapse-arrow {
-        transition: transform 0.3s ease;
-        font-size: 0.8rem;
-        margin-left: auto;
-    }
-
-        .collapse-arrow.rotated {
-            transform: rotate(180deg);
-        }
-
-    .nav-sub-section {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease;
-    }
-
-        .nav-sub-section.expanded {
-            max-height: 500px;
-        }
-
-    .nav-sub-menu {
-        padding-left: 1rem;
-        border-left: 2px solid rgba(255, 255, 255, 0.1);
-        margin-left: 1rem;
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-    }
     /* Estilos para el menú desplegable */
     .nav-section-toggle {
         display: flex;

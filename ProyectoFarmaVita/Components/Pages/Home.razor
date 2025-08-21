@@ -40,9 +40,9 @@
         </MudItem>
 
         <!-- Accesos rápidos según el rol -->
-        <AuthorizeView Roles="Administrador">
+        <AuthorizeView Roles="Administrador,Gerente">
             <Authorized>
-                <!-- Dashboard para Administradores -->
+                <!-- Dashboard para Administradores y Gerentes -->
                 <MudItem xs="12">
                     <MudText Typo="Typo.h5" Class="mb-3">Panel de Administración</MudText>
                 </MudItem>
@@ -89,7 +89,7 @@
             </Authorized>
         </AuthorizeView>
 
-        <AuthorizeView Roles="Farmaceutico">
+        <AuthorizeView Roles="Farmaceuta">
             <Authorized>
                 <!-- Dashboard para Farmacéuticos -->
                 <MudItem xs="12">
