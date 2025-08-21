@@ -1,0 +1,291 @@
+﻿@page "/sucursal"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.SucursalServices
+@using ProyectoFarmaVita.Services.PersonaServices
+@using MudBlazor
+
+@inject ISucursalService SucursalServices
+@inject IPersonaService PersonaServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+
+
+<h3 style="margin-bottom: 20px;">Sucursales</h3>
+<a href="/sucursal/agregar" class="btn btn-primary mt-2">Nueva Sucursal</a>
+
+<br />
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">Sucursales Disponibles</MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="4">
+            <MudTextField T="string" Label="Buscar por Nombre o Email"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search" />
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudSelect T="int?"
+                       Label="Filtrar por Responsable"
+                       @bind-Value="selectedResponsableId"
+                       Variant="Variant.Outlined"
+                       Clearable="true"
+                       OnClearButtonClick="ClearResponsableFilter">
+                <MudSelectItem Value="@((int?)null)">Todos los responsables</MudSelectItem>
+                @if (responsables != null)
+                {
+                    @foreach (var responsable in responsables)
+                    {
+                        <MudSelectItem Value="@((int?)responsable.IdPersona)">@($"{responsable.Nombre} {responsable.Apellido}")</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Filtrar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    {
+        <MudAlert Severity="Severity.Error">Error al cargar los datos.</MudAlert>
+    }
+    else
+    {
+        <MudTable T="Sucursal"
+                  ServerData="ServerReload"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Nombre Sucursal</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Responsable</MudTh>
+                <MudTh>Horario</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.IdSucursal</MudTd>
+                <MudTd DataLabel="Nombre">@context.NombreSucursal</MudTd>
+                <MudTd DataLabel="Email">@context.EmailSucursal</MudTd>
+                <MudTd DataLabel="Responsable">@($"{context.ResponsableSucursalNavigation?.Nombre} {context.ResponsableSucursalNavigation?.Apellido}")</MudTd>
+                <MudTd DataLabel="Horario">@($"{context.HorarioApertura?.ToString("HH:mm")} - {context.HorarioCierre?.ToString("HH:mm")}")</MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-grid gap-2 d-md-block">
+                        <a href="/sucursal/agregar/@context.IdSucursal" class="btn btn-warning">Editar</a>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Sucursales por pagina:"
+                               InfoFormat="@infoFormat"
+                               PageSizeOptions="new int[] { 20, 25, 30, 40, int.MaxValue }"
+                               OnPageChanged="LoadPage"
+                               Class="acciones" />
+            </PagerContent>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    private MPaginatedResult<Sucursal> paginatedResult;
+    private bool isLoading = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private DialogOptions dialogOptions = new() { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+    private const int PageSize = 25;
+    private string searchArea = "";
+    private List<Sucursal> sucursales = new();
+    private List<Persona> responsables = new();
+    private int? selectedResponsableId = null;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadResponsables();
+        await LoadPage(1);
+    }
+
+    private async Task LoadResponsables()
+    {
+        try
+        {
+            responsables = await PersonaServices.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar responsables: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPage(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (selectedResponsableId.HasValue)
+            {
+                // Si hay un responsable seleccionado, usar el método específico
+                var sucursalesByResp = await SucursalServices.GetByResponsableAsync(selectedResponsableId.Value);
+
+                // Aplicar filtro de búsqueda si existe
+                if (!string.IsNullOrEmpty(searchArea))
+                {
+                    sucursalesByResp = sucursalesByResp.Where(s =>
+                        s.NombreSucursal.Contains(searchArea, StringComparison.OrdinalIgnoreCase) ||
+                        (s.EmailSucursal != null && s.EmailSucursal.Contains(searchArea, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+
+                // Crear resultado paginado manual
+                var totalItems = sucursalesByResp.Count;
+                var items = sucursalesByResp
+                    .Skip((page - 1) * PageSize)
+                    .Take(PageSize)
+                    .ToList();
+
+                paginatedResult = new MPaginatedResult<Sucursal>
+                {
+                    Items = items,
+                    TotalCount = totalItems,
+                    PageNumber = page,
+                    PageSize = PageSize
+                };
+            }
+            else
+            {
+                // Sin filtro de responsable, usar paginación normal
+                paginatedResult = await SucursalServices.GetPaginatedAsync(page, PageSize, searchArea);
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<TableData<Sucursal>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        isLoading = true;
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+
+            if (selectedResponsableId.HasValue)
+            {
+                // Si hay un responsable seleccionado
+                var sucursalesByResp = await SucursalServices.GetByResponsableAsync(selectedResponsableId.Value);
+
+                // Aplicar filtro de búsqueda si existe
+                if (!string.IsNullOrEmpty(searchArea))
+                {
+                    sucursalesByResp = sucursalesByResp.Where(s =>
+                        s.NombreSucursal.Contains(searchArea, StringComparison.OrdinalIgnoreCase) ||
+                        (s.EmailSucursal != null && s.EmailSucursal.Contains(searchArea, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+
+                var totalItems = sucursalesByResp.Count;
+                var items = sucursalesByResp
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                return new TableData<Sucursal>
+                {
+                    Items = items,
+                    TotalItems = totalItems
+                };
+            }
+            else
+            {
+                paginatedResult = await SucursalServices.GetPaginatedAsync(page, pageSize, searchArea);
+                return new TableData<Sucursal>
+                {
+                    Items = paginatedResult.Items,
+                    TotalItems = paginatedResult.TotalCount
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new TableData<Sucursal>
+            {
+                Items = new List<Sucursal>(),
+                TotalItems = 0
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Search()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        selectedResponsableId = null;
+        await LoadPage(1);
+    }
+
+    private async Task ClearResponsableFilter()
+    {
+        selectedResponsableId = null;
+        await LoadPage(1);
+    }
+
+    private async Task PrintTable()
+    {
+        await JSRuntime.InvokeVoidAsync("printTable");
+    }
+}
