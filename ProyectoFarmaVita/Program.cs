@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using ProyectoFarmaVita.Components;
@@ -10,6 +11,7 @@ using ProyectoFarmaVita.Services.DireccionServices;
 using ProyectoFarmaVita.Services.EstadoCivilServices;
 using ProyectoFarmaVita.Services.GeneroServices;
 using ProyectoFarmaVita.Services.InventarioService;
+using ProyectoFarmaVita.Services.LoginServices;
 using ProyectoFarmaVita.Services.MunicipioService;
 using ProyectoFarmaVita.Services.MunicipioServices;
 using ProyectoFarmaVita.Services.PersonaServices;
@@ -27,7 +29,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// CAMBIO 1: Cambiar de Scoped a Transient para el servicio
+// Registro de servicios de la aplicación
 builder.Services.AddTransient<IPersonaService, SPersonaServices>();
 builder.Services.AddTransient<ISucursalService, SSucursalService>();
 builder.Services.AddTransient<IEstadoCivil, SEstadoCivil>();
@@ -42,19 +44,24 @@ builder.Services.AddScoped<ICategoriaService, SCategoriaService>();
 builder.Services.AddScoped<IProveedorService, SProveedorService>();
 builder.Services.AddScoped<IProductoService, SProductoService>();
 builder.Services.AddScoped<IInventarioService, SInventarioService>();
+builder.Services.AddScoped<ILoginService, LoginService>();
 
-
+// MudBlazor
 builder.Services.AddMudServices();
 
-
-// CAMBIO 3: Mantener solo DbContextFactory pero cambiar el ServiceLifetime
+// Registro del DbContext
 builder.Services.AddDbContextFactory<FarmaDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlServerOptions => sqlServerOptions.EnableRetryOnFailure());
     options.EnableSensitiveDataLogging(true);
     options.UseLazyLoadingProxies(false);
-}, ServiceLifetime.Singleton); // Cambiar de Scoped a Singleton
+}, ServiceLifetime.Singleton);
+
+// Registro de CustomAuthenticationStateProvider
+builder.Services.AddScoped<CustomAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
+    provider.GetRequiredService<CustomAuthenticationStateProvider>());
 
 var app = builder.Build();
 
@@ -62,7 +69,6 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 

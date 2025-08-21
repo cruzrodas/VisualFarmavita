@@ -1,6 +1,75 @@
-﻿<Router AppAssembly="typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-</Router>
+﻿@using Microsoft.AspNetCore.Components.Authorization
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    <AuthorizeView>
+                        <Authorized Context="auth">
+                            @* Usuario autenticado pero sin permisos *@
+                            <div class="access-denied-container">
+                                <div class="access-denied-content">
+                                    <i class="fas fa-lock access-denied-icon"></i>
+                                    <h1>Acceso Denegado</h1>
+                                    <p>No tienes permisos para acceder a esta página del sistema FarmaVita.</p>
+                                    <MudButton Variant="Variant.Filled" 
+                                               Color="Color.Primary" 
+                                               Href="/"
+                                               StartIcon="@Icons.Material.Filled.Home">
+                                        Volver al inicio
+                                    </MudButton>
+                                </div>
+                            </div>
+                        </Authorized>
+                        <NotAuthorized Context="auth">
+                            @* Usuario no autenticado - redirigir al login *@
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="loading-container">
+                        <div class="loading-content">
+                            <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
+                            <p>Verificando permisos...</p>
+                        </div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(Layout.MainLayout)">
+                <div class="not-found-container">
+                    <div class="not-found-content">
+                        <i class="fas fa-capsules not-found-icon"></i>
+                        <h1>404 - Página no encontrada</h1>
+                        <p>Lo sentimos, la página que buscas no existe en el sistema FarmaVita.</p>
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="Color.Primary" 
+                                   Href="/"
+                                   StartIcon="@Icons.Material.Filled.Home">
+                            Volver al inicio
+                        </MudButton>
+                    </div>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthProvider { get; set; } = default!;
+
+    protected override async void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+            }
+        }
+    }
+}

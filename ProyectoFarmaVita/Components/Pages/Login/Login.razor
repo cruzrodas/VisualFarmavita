@@ -1,0 +1,467 @@
+﻿@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.LoginServices
+@inject ILoginService LoginService
+@inject NavigationManager NavigationManager
+@inject ILogger<Login> logger
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider customAuthenticationStateProvider
+
+<PageTitle>FarmaVita - Iniciar Sesión</PageTitle>
+
+<div class="login-page-container">
+	<div class="login-form-container">
+		<div class="login-background">
+			<div class="content-wrapper">
+				<div class="welcome-side">
+					<div class="logo-container">
+						<div class="pharmacy-logo">
+							<i class="fas fa-mortar-pestle"></i>
+							<h1>FarmaVita</h1>
+						</div>
+						<p class="tagline">Sistema de Gestión Farmacéutica</p>
+					</div>
+					<div class="features">
+						<div class="feature-item">
+							<i class="fas fa-pills"></i>
+							<span>Gestión de Inventario</span>
+						</div>
+						<div class="feature-item">
+							<i class="fas fa-receipt"></i>
+							<span>Control de Ventas</span>
+						</div>
+						<div class="feature-item">
+							<i class="fas fa-users"></i>
+							<span>Administración de Personal</span>
+						</div>
+					</div>
+				</div>
+				<div class="login-side">
+					<div class="login-form">
+						<h2>Iniciar Sesión</h2>
+						<p class="login-subtitle">Accede a tu cuenta del sistema</p>
+
+						@if (!string.IsNullOrEmpty(errorMessage))
+						{
+							<MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+						}
+
+						<EditForm Model="@credencialesUsuario" OnValidSubmit="@HandleLogin">
+							<DataAnnotationsValidator />
+
+							<div class="form-group">
+								<MudTextField Label="Correo Electrónico"
+											  @bind-Value="credencialesUsuario.Email"
+											  For="@(() => credencialesUsuario.Email)"
+											  Required="true"
+											  Variant="Variant.Outlined"
+											  FullWidth="true"
+											  Class="mb-3"
+											  Adornment="Adornment.Start"
+											  AdornmentIcon="@Icons.Material.Filled.Email" />
+							</div>
+
+							<div class="form-group">
+								<MudTextField Label="Contraseña"
+											  @bind-Value="credencialesUsuario.Password"
+											  For="@(() => credencialesUsuario.Password)"
+											  InputType="@passwordInput"
+											  Required="true"
+											  Variant="Variant.Outlined"
+											  FullWidth="true"
+											  Adornment="Adornment.End"
+											  AdornmentIcon="@(passwordVisible? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+											  OnAdornmentClick="PasswordVisibility" />
+							</div>
+
+							<div class="form-group">
+								<MudButton ButtonType="ButtonType.Submit"
+										   Variant="Variant.Filled"
+										   Color="Color.Primary"
+										   FullWidth="true"
+										   Size="Size.Large"
+										   Class="iniciar-sesion-button"
+										   Disabled="@isLoading">
+									@if (isLoading)
+									{
+										<MudProgressCircular Size="Size.Small" Indeterminate="true" />
+										<span class="ml-2">Iniciando sesión...</span>
+									}
+									else
+									{
+										<i class="fas fa-sign-in-alt mr-2"></i>
+										<span>Iniciar Sesión</span>
+									}
+								</MudButton>
+							</div>
+						</EditForm>
+
+						<div class="login-footer">
+							<p class="text-center text-muted">
+								<small>© 2025 FarmaVita. Todos los derechos reservados.</small>
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.login-page-container {
+		height: 100vh;
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		padding: 1rem;
+		position: relative;
+	}
+
+	.login-page-container::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+		opacity: 0.3;
+	}
+
+	.login-form-container {
+		width: 100%;
+		max-width: 1100px;
+		height: auto;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+		border-radius: 16px;
+		overflow: hidden;
+		background-color: white;
+		position: relative;
+		z-index: 1;
+	}
+
+	.content-wrapper {
+		display: flex;
+		flex-direction: row;
+		min-height: 600px;
+	}
+
+	.welcome-side {
+		flex: 1;
+		padding: 3rem;
+		background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+		color: white;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		position: relative;
+	}
+
+	.welcome-side::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="pills" width="50" height="50" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="2" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23pills)"/></svg>');
+		opacity: 0.3;
+	}
+
+	.logo-container {
+		text-align: center;
+		margin-bottom: 3rem;
+		position: relative;
+		z-index: 1;
+	}
+
+	.pharmacy-logo {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.pharmacy-logo i {
+		font-size: 4rem;
+		margin-bottom: 1rem;
+		color: white;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	}
+
+	.pharmacy-logo h1 {
+		font-size: 2.5rem;
+		font-weight: 700;
+		margin: 0;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+		letter-spacing: -0.5px;
+	}
+
+	.tagline {
+		font-size: 1.1rem;
+		opacity: 0.9;
+		margin: 0;
+		font-weight: 300;
+	}
+
+	.features {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		position: relative;
+		z-index: 1;
+	}
+
+	.feature-item {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		font-size: 1rem;
+		opacity: 0.95;
+	}
+
+	.feature-item i {
+		font-size: 1.5rem;
+		width: 2rem;
+		text-align: center;
+	}
+
+	.login-side {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: white;
+		padding: 3rem;
+	}
+
+	.login-form {
+		width: 100%;
+		max-width: 400px;
+	}
+
+	.login-form h2 {
+		margin-bottom: 0.5rem;
+		font-weight: 600;
+		font-size: 2rem;
+		color: #2E7D32;
+		text-align: center;
+	}
+
+	.login-subtitle {
+		text-align: center;
+		color: #666;
+		margin-bottom: 2rem;
+		font-size: 0.95rem;
+	}
+
+	.form-group {
+		margin-bottom: 1.5rem;
+	}
+
+	.iniciar-sesion-button {
+		background-color: #4CAF50 !important;
+		color: white !important;
+		margin-top: 1rem;
+		margin-bottom: 2rem;
+		transition: all 0.3s ease;
+		font-weight: 500;
+		letter-spacing: 0.5px;
+		height: 48px;
+		text-transform: none;
+		box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+	}
+
+	.iniciar-sesion-button:hover {
+		background-color: #45a049 !important;
+		transform: translateY(-2px);
+		box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+	}
+
+	.iniciar-sesion-button:disabled {
+		background-color: #ccc !important;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.login-footer {
+		border-top: 1px solid #eee;
+		padding-top: 1.5rem;
+	}
+
+	.mr-2 {
+		margin-right: 0.5rem;
+	}
+
+	.ml-2 {
+		margin-left: 0.5rem;
+	}
+
+	@@media (max-width: 768px) {
+		.content-wrapper {
+			flex-direction: column;
+			min-height: auto;
+		}
+
+		.welcome-side {
+			order: 1;
+			padding: 2rem 1.5rem;
+			min-height: auto;
+		}
+
+		.login-side {
+			order: 2;
+			padding: 2rem 1.5rem;
+		}
+
+		.pharmacy-logo h1 {
+			font-size: 2rem;
+		}
+
+		.pharmacy-logo i {
+			font-size: 3rem;
+		}
+
+		.features {
+			flex-direction: row;
+			justify-content: space-around;
+			gap: 1rem;
+		}
+
+		.feature-item {
+			flex-direction: column;
+			text-align: center;
+			gap: 0.5rem;
+			font-size: 0.9rem;
+		}
+
+		.login-form-container {
+			max-width: 95%;
+			margin: 0.5rem;
+		}
+	}
+
+	@@media (max-width: 480px) {
+		.login-page-container {
+			padding: 0.5rem;
+		}
+
+		.welcome-side, .login-side {
+			padding: 1.5rem 1rem;
+		}
+
+		.pharmacy-logo h1 {
+			font-size: 1.8rem;
+		}
+
+		.login-form h2 {
+			font-size: 1.6rem;
+			margin-bottom: 0.5rem;
+		}
+
+		.form-group {
+			margin-bottom: 1rem;
+		}
+
+		.features {
+			gap: 0.5rem;
+		}
+
+		.feature-item {
+			font-size: 0.8rem;
+		}
+	}
+</style>
+
+@code {
+	private CredencialesUsuario credencialesUsuario = new CredencialesUsuario();
+	private string errorMessage = string.Empty;
+	private bool passwordVisible = false;
+	private InputType passwordInput = InputType.Password;
+	private bool isLoading = false;
+
+	private void PasswordVisibility()
+	{
+		if (passwordVisible)
+		{
+			passwordVisible = false;
+			passwordInput = InputType.Password;
+		}
+		else
+		{
+			passwordVisible = true;
+			passwordInput = InputType.Text;
+		}
+	}
+
+	private async Task HandleLogin()
+	{
+		isLoading = true;
+		errorMessage = string.Empty;
+		StateHasChanged();
+
+		try
+		{
+			RespuestaAutenticacion respuestaAutenticacion = await LoginService.Login(credencialesUsuario);
+
+			if (!string.IsNullOrEmpty(respuestaAutenticacion.Token))
+			{
+				await customAuthenticationStateProvider.SetTokenAsync(respuestaAutenticacion.Token);
+				AuthenticationState data = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
+
+				// Mostrar mensaje de éxito
+				Snackbar.Add("Inicio de sesión exitoso", Severity.Success);
+
+				// Navegar según el rol del usuario
+				if (data.User.IsInRole("Administrador"))
+				{
+					NavigationManager.NavigateTo("/dashboard");
+				}
+				else if (data.User.IsInRole("Farmaceutico"))
+				{
+					NavigationManager.NavigateTo("/ventas");
+				}
+				else if (data.User.IsInRole("Cajero"))
+				{
+					NavigationManager.NavigateTo("/caja");
+				}
+				else
+				{
+					// Rol por defecto o usuario básico
+					NavigationManager.NavigateTo("/");
+				}
+
+				StateHasChanged();
+			}
+			else
+			{
+				logger.LogWarning("Credenciales inválidas para el email: {Email}", credencialesUsuario.Email);
+				errorMessage = respuestaAutenticacion.Error ?? "Error al iniciar sesión. Por favor, verifique sus credenciales.";
+				Snackbar.Add("Credenciales incorrectas", Severity.Error);
+			}
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error durante el inicio de sesión para el email: {Email}", credencialesUsuario.Email);
+			errorMessage = "Ocurrió un error inesperado. Por favor, intente nuevamente.";
+			Snackbar.Add("Error del sistema. Intente nuevamente.", Severity.Error);
+		}
+		finally
+		{
+			isLoading = false;
+			StateHasChanged();
+		}
+	}
+
+	protected override void OnInitialized()
+	{
+		// Limpiar cualquier estado previo
+		credencialesUsuario = new CredencialesUsuario();
+		errorMessage = string.Empty;
+	}
+}
