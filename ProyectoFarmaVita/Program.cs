@@ -29,6 +29,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add authentication services with custom paths
+builder.Services.AddAuthentication("Cookies")
+    .AddCookie("Cookies", options =>
+    {
+        options.LoginPath = "/Login"; // Tu ruta de login personalizada
+        options.LogoutPath = "/Logout";
+        options.AccessDeniedPath = "/AccessDenied";
+        options.ExpireTimeSpan = TimeSpan.FromHours(24);
+        options.SlidingExpiration = true;
+    });
+
+// Add authorization services
+builder.Services.AddAuthorization();
+
 // Registro de servicios de la aplicación
 builder.Services.AddTransient<IPersonaService, SPersonaServices>();
 builder.Services.AddTransient<ISucursalService, SSucursalService>();
@@ -73,7 +87,13 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Add authentication and authorization middleware
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

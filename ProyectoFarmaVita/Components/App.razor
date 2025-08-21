@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 
 <head>
     <meta charset="utf-8" />
@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="@Assets["ProyectoFarmaVita.styles.css"]" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -17,10 +18,178 @@
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <CascadingAuthenticationState>
+        <Routes @rendermode="InteractiveServer" />
+    </CascadingAuthenticationState>
 
     <script src="_framework/blazor.web.js"></script>
-        <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    
+    <!-- Scripts para manejar la actividad de la ventana y funciones auxiliares -->
+    <script>
+        let dotNetHelper;
+
+        window.blazorCulture = {
+            get: () => window.localStorage['BlazorCulture'],
+            set: (value) => window.localStorage['BlazorCulture'] = value
+        };
+
+        window.setDotNetHelper = (helper) => {
+            dotNetHelper = helper;
+            console.log('DotNet helper set successfully');
+        };
+
+        // Detectar cuando la ventana pierde/gana foco
+        window.addEventListener('focus', () => {
+            if (dotNetHelper) {
+                dotNetHelper.invokeMethodAsync('SetWindowActiveStatus', true);
+            }
+        });
+
+        window.addEventListener('blur', () => {
+            if (dotNetHelper) {
+                dotNetHelper.invokeMethodAsync('SetWindowActiveStatus', false);
+            }
+        });
+
+        // Función para comprimir imágenes (para el módulo de productos)
+        window.compressImage = (base64String, maxWidth, maxHeight, quality) => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    let { width, height } = img;
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = height * (maxWidth / width);
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = width * (maxHeight / height);
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+                    resolve(compressedBase64);
+                };
+                img.src = 'data:image/jpeg;base64,' + base64String;
+            });
+        };
+
+        // Función para imprimir tablas
+        window.printTable = () => {
+            window.print();
+        };
+
+        // Prevenir que el usuario navegue hacia atrás sin autorización
+        window.addEventListener('beforeunload', (e) => {
+            // Solo mostrar confirmación si está en una página protegida
+            if (!window.location.pathname.includes('/login')) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+
+    <style>
+        /* Estilos para páginas de estado */
+        .loading-container, 
+        .access-denied-container, 
+        .not-found-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .access-denied-content, 
+        .not-found-content, 
+        .loading-content {
+            text-align: center;
+            max-width: 500px;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .access-denied-icon, 
+        .not-found-icon {
+            font-size: 4rem;
+            color: #ff6b6b;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Spinner personalizado */
+        .spinner-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            flex-direction: column;
+        }
+
+        .spinner-image {
+            width: 80px;
+            height: 80px;
+            animation: spin 2s linear infinite;
+        }
+
+        @@keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mejorar el aspecto visual general */
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+
+        /* Estilos para tablas imprimibles */
+        @@media print {
+            .acciones {
+                display: none !important;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .printable-table {
+                width: 100% !important;
+                font-size: 12px !important;
+            }
+        }
+
+        /* Transiciones suaves */
+        * {
+            transition: all 0.3s ease;
+        }
+
+        /* Mejoras para la accesibilidad */
+        .cursor-pointer {
+            cursor: pointer;
+        }
+
+        .cursor-pointer:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+
 </body>
 
 </html>
