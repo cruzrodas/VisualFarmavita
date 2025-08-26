@@ -1,80 +1,63 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.JSInterop;
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 
 namespace ProyectoFarmaVita.Services.LoginServices
 {
-    public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IDisposable
+    public class CustomAuthenticationStateProvider : AuthenticationStateProvider
     {
-        private readonly IJSRuntime _jsRuntime;
-        private bool _disposed = false;
-        private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
+        private readonly ProtectedLocalStorage _localStorage;
+        private readonly ILogger<CustomAuthenticationStateProvider> _logger;
+        private ClaimsPrincipal _anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+        private const string TOKEN_KEY = "authToken";
 
-        public CustomAuthenticationStateProvider(IJSRuntime jsRuntime)
+        public CustomAuthenticationStateProvider(ProtectedLocalStorage localStorage,
+                                               ILogger<CustomAuthenticationStateProvider> logger)
         {
-            _jsRuntime = jsRuntime;
+            _localStorage = localStorage;
+            _logger = logger;
         }
 
         public override async Task<AuthenticationState> GetAuthenticationStateAsync()
         {
             try
             {
-                // Durante prerendering, no podemos acceder al localStorage
+                Console.WriteLine("🔍 GetAuthenticationStateAsync - Iniciando...");
+
                 var token = await GetTokenAsync();
 
                 if (string.IsNullOrEmpty(token))
                 {
-                    Console.WriteLine("🔍 No hay token - Usuario no autenticado");
-                    _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                    return new AuthenticationState(_currentUser);
+                    Console.WriteLine("❌ Token no encontrado o vacío");
+                    return new AuthenticationState(_anonymous);
                 }
 
-                var claims = ParseClaimsFromJwt(token);
-                if (claims == null || !claims.Any())
+                Console.WriteLine($"🎟️ Token encontrado: {token.Substring(0, Math.Min(50, token.Length))}...");
+
+                var identity = GetClaimsIdentityFromToken(token);
+
+                if (identity == null || !identity.IsAuthenticated)
                 {
-                    Console.WriteLine("🔍 Token inválido o sin claims");
+                    Console.WriteLine("❌ Token inválido o expirado");
                     await RemoveTokenAsync();
-                    _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                    return new AuthenticationState(_currentUser);
+                    return new AuthenticationState(_anonymous);
                 }
 
-                // Verificar si el token ha expirado
-                var expiryClaim = claims.FirstOrDefault(x => x.Type == "exp");
-                if (expiryClaim != null)
-                {
-                    var expiryDateUnix = long.Parse(expiryClaim.Value);
-                    var expiryDate = DateTimeOffset.FromUnixTimeSeconds(expiryDateUnix);
+                var user = new ClaimsPrincipal(identity);
+                var userName = user.FindFirst("nombre")?.Value ??
+                              user.FindFirst(ClaimTypes.Email)?.Value ??
+                              "Usuario desconocido";
 
-                    if (expiryDate <= DateTimeOffset.UtcNow)
-                    {
-                        Console.WriteLine("🔍 Token expirado");
-                        await RemoveTokenAsync();
-                        _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                        return new AuthenticationState(_currentUser);
-                    }
-                }
+                Console.WriteLine($"✅ Usuario autenticado: {userName}");
 
-                var identity = new ClaimsIdentity(claims, "jwt");
-                _currentUser = new ClaimsPrincipal(identity);
-
-                Console.WriteLine($"✅ Usuario autenticado: {_currentUser.FindFirst("nombre")?.Value ?? "Sin nombre"}");
-                Console.WriteLine($"✅ Rol: {_currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol"}");
-
-                return new AuthenticationState(_currentUser);
-            }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
-            {
-                // Durante prerendering, retornamos usuario no autenticado
-                Console.WriteLine("🔍 JSInterop no disponible durante prerendering - Usuario no autenticado");
-                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                return new AuthenticationState(_currentUser);
+                return new AuthenticationState(user);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error getting authentication state");
                 Console.WriteLine($"❌ Error en GetAuthenticationStateAsync: {ex.Message}");
-                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                return new AuthenticationState(_currentUser);
+                return new AuthenticationState(_anonymous);
             }
         }
 
@@ -86,35 +69,36 @@ namespace ProyectoFarmaVita.Services.LoginServices
 
                 if (string.IsNullOrEmpty(token))
                 {
-                    await RemoveTokenAsync();
+                    Console.WriteLine("❌ Token vacío, no se guardará");
                     return;
                 }
 
-                // Solo intentar guardar si JSInterop está disponible
-                try
-                {
-                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", token);
-                    Console.WriteLine("✅ Token guardado en localStorage");
-                }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
-                {
-                    Console.WriteLine("⚠️ No se puede guardar en localStorage durante prerendering");
-                    // Continuamos sin error - el token se guardará cuando JSInterop esté disponible
-                }
+                await _localStorage.SetAsync(TOKEN_KEY, token);
+                Console.WriteLine("✅ Token guardado exitosamente");
 
-                // Actualizar el estado de autenticación inmediatamente
-                var claims = ParseClaimsFromJwt(token);
-                if (claims != null && claims.Any())
+                // Verificar que se guardó correctamente
+                var savedToken = await GetTokenAsync();
+                if (savedToken == token)
                 {
-                    var identity = new ClaimsIdentity(claims, "jwt");
-                    _currentUser = new ClaimsPrincipal(identity);
+                    Console.WriteLine("✅ Token verificado correctamente");
 
-                    Console.WriteLine("✅ Estado de autenticación actualizado en memoria");
-                    NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+                    // Crear identity y notificar cambio
+                    var identity = GetClaimsIdentityFromToken(token);
+                    if (identity != null && identity.IsAuthenticated)
+                    {
+                        var authState = new AuthenticationState(new ClaimsPrincipal(identity));
+                        NotifyAuthenticationStateChanged(Task.FromResult(authState));
+                        Console.WriteLine("✅ Estado de autenticación actualizado");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("❌ Error: el token no se guardó correctamente");
                 }
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error setting token");
                 Console.WriteLine($"❌ Error al guardar token: {ex.Message}");
             }
         }
@@ -123,18 +107,8 @@ namespace ProyectoFarmaVita.Services.LoginServices
         {
             try
             {
-                // Verificar si JSInterop está disponible
-                if (_jsRuntime is IJSInProcessRuntime)
-                {
-                    var token = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
-                    return token ?? string.Empty;
-                }
-                else
-                {
-                    // Durante prerendering, JSInterop no está disponible
-                    Console.WriteLine("🔍 JSInterop no disponible durante prerendering");
-                    return string.Empty;
-                }
+                var result = await _localStorage.GetAsync<string>(TOKEN_KEY);
+                return result.Success ? result.Value : string.Empty;
             }
             catch (Exception ex)
             {
@@ -143,92 +117,86 @@ namespace ProyectoFarmaVita.Services.LoginServices
             }
         }
 
-        public async Task RemoveTokenAsync()
-        {
-            try
-            {
-                Console.WriteLine("🗑️ Removiendo token...");
-
-                try
-                {
-                    await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
-                    Console.WriteLine("✅ Token removido del localStorage");
-                }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
-                {
-                    Console.WriteLine("⚠️ No se puede acceder a localStorage durante prerendering");
-                }
-
-                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-
-                NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
-                Console.WriteLine("✅ Estado de autenticación limpiado");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error al remover token: {ex.Message}");
-            }
-        }
-
-        public async Task InitializeAsync()
-        {
-            try
-            {
-                Console.WriteLine("🚀 Inicializando AuthenticationStateProvider...");
-                var authState = await GetAuthenticationStateAsync();
-                NotifyAuthenticationStateChanged(Task.FromResult(authState));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error al inicializar: {ex.Message}");
-            }
-        }
-
         public async Task LogoutAsync()
         {
-            await RemoveTokenAsync();
+            try
+            {
+                Console.WriteLine("🚪 Cerrando sesión...");
+                await RemoveTokenAsync();
+
+                var authState = new AuthenticationState(_anonymous);
+                NotifyAuthenticationStateChanged(Task.FromResult(authState));
+                Console.WriteLine("✅ Sesión cerrada exitosamente");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                Console.WriteLine($"❌ Error al cerrar sesión: {ex.Message}");
+            }
         }
 
-        private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
+        private async Task RemoveTokenAsync()
         {
             try
             {
-                var handler = new JwtSecurityTokenHandler();
-                var jsonToken = handler.ReadJwtToken(jwt);
+                await _localStorage.DeleteAsync(TOKEN_KEY);
+                Console.WriteLine("✅ Token eliminado");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al eliminar token: {ex.Message}");
+            }
+        }
 
-                var claims = jsonToken.Claims.ToList();
-
-                // Agregar claim de Name si no existe
-                if (!claims.Any(c => c.Type == ClaimTypes.Name))
+        private ClaimsIdentity GetClaimsIdentityFromToken(string token)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(token))
                 {
-                    var nombreClaim = claims.FirstOrDefault(c => c.Type == "nombre");
-                    if (nombreClaim != null)
-                    {
-                        claims.Add(new Claim(ClaimTypes.Name, nombreClaim.Value));
-                    }
+                    Console.WriteLine("❌ Token vacío en GetClaimsIdentityFromToken");
+                    return null;
                 }
 
-                Console.WriteLine($"🔍 Claims parseados: {claims.Count}");
+                var tokenHandler = new JwtSecurityTokenHandler();
+
+                // Verificar que el token tiene el formato correcto
+                if (!tokenHandler.CanReadToken(token))
+                {
+                    Console.WriteLine("❌ Token con formato inválido");
+                    return null;
+                }
+
+                var jwtToken = tokenHandler.ReadJwtToken(token);
+
+                // Verificar expiración
+                if (jwtToken.ValidTo < DateTime.UtcNow)
+                {
+                    Console.WriteLine($"❌ Token expirado. Expira: {jwtToken.ValidTo}, Actual: {DateTime.UtcNow}");
+                    return null;
+                }
+
+                var claims = jwtToken.Claims.ToList();
+                Console.WriteLine($"🎫 Claims encontrados: {claims.Count}");
+
                 foreach (var claim in claims)
                 {
                     Console.WriteLine($"   - {claim.Type}: {claim.Value}");
                 }
 
-                return claims;
+                return new ClaimsIdentity(claims, "jwt");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error al parsear JWT: {ex.Message}");
-                return new List<Claim>();
+                Console.WriteLine($"❌ Error al procesar token: {ex.Message}");
+                return null;
             }
         }
 
-        public void Dispose()
+        public async Task<bool> IsAuthenticatedAsync()
         {
-            if (!_disposed)
-            {
-                _disposed = true;
-            }
+            var authState = await GetAuthenticationStateAsync();
+            return authState.User.Identity?.IsAuthenticated ?? false;
         }
     }
 }

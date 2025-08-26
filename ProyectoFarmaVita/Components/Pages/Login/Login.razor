@@ -83,20 +83,6 @@
         </div>
     </div>
 }
-else
-{
-    <div class="loading-container">
-        <div class="loading-content">
-            <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
-            <MudImage Src="images/Logo FarmaVita.png"
-                      Width="120"
-                      Height="120"
-                      Alt="FarmaVita Logo"
-                      Class="mt-4 pulse-img" />
-            <p class="mt-3">Redirigiendo...</p>
-        </div>
-    </div>
-}
 
 @code {
     private CredencialesUsuario credencialesUsuario = new CredencialesUsuario();
@@ -118,9 +104,10 @@ else
 
             Console.WriteLine($"🔍 Estado inicial de autenticación: {isUserAuthenticated}");
 
-            if (isUserAuthenticated)
+            // Solo redirigir si estamos en /login y el usuario ya tiene sesión
+            if (isUserAuthenticated && NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("✅ Usuario ya autenticado, redirigiendo inmediatamente...");
+                Console.WriteLine("✅ Usuario ya autenticado, redirigiendo a inicio...");
                 NavigationManager.NavigateTo("/", replace: true);
                 return;
             }
@@ -159,7 +146,10 @@ else
                 // Guardar token
                 await customAuthenticationStateProvider.SetTokenAsync(respuestaAutenticacion.Token);
 
-                // Verificar autenticación inmediatamente
+                // Esperar un momento para que el estado se actualice
+                await Task.Delay(100);
+
+                // Verificar autenticación después
                 var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
                 var isAuthenticated = authState?.User?.Identity?.IsAuthenticated ?? false;
 
@@ -174,14 +164,17 @@ else
                     Console.WriteLine($"👤 Usuario autenticado: {userName}");
                     Snackbar.Add($"¡Bienvenido, {userName}!", Severity.Success);
 
-                    // Redirigir inmediatamente sin esperar
+                    isUserAuthenticated = true;
+                    StateHasChanged();
+
+                    await Task.Delay(500);
                     NavigationManager.NavigateTo("/", replace: true);
                 }
                 else
                 {
-                    Console.WriteLine("❌ Error: Usuario no quedó autenticado después del login");
-                    errorMessage = "Error interno de autenticación";
+                    errorMessage = "Error de autenticación. Por favor, intente nuevamente.";
                     Snackbar.Add(errorMessage, Severity.Error);
+                    await customAuthenticationStateProvider.LogoutAsync();
                 }
             }
             else
@@ -206,6 +199,6 @@ else
 
     public void Dispose()
     {
-        // Simplificado - removemos las suscripciones que pueden causar loops
+        // Aquí podrías limpiar suscripciones si las tuvieras
     }
 }
