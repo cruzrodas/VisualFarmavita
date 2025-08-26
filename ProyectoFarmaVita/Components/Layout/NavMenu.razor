@@ -1,400 +1,145 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
-@inject AuthenticationStateProvider AuthProvider
-@inject NavigationManager Navigation
-@inject IJSRuntime JSRuntime
+﻿@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject CustomAuthenticationStateProvider AuthStateProvider
+@attribute [Authorize]
+@implements IDisposable
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
-        <a class="navbar-brand" href="">
-            <i class="fas fa-mortar-pestle me-2"></i>
-            ProyectoFarmaVita
-        </a>
+<MudNavMenu Style="background-color: white;">
 
-        <!-- Información del usuario y logout -->
-        <AuthorizeView>
-            <Authorized>
-                <div class="d-flex align-items-center">
-                    <div class="me-3 text-light">
-                        <small>
-                            <i class="fas fa-user me-1"></i>
-                            @GetUserName()
-                            <br />
-                            <span class="badge bg-secondary">@GetUserRole()</span>
-                        </small>
-                    </div>
-                    <button class="btn btn-outline-light btn-sm" @onclick="Logout">
-                        <i class="fas fa-sign-out-alt me-1"></i>
-                        Salir
-                    </button>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-    </div>
-</div>
+	<!-- Dashboard/Home -->
+	<AuthorizeView>
+		<Authorized>
+			<MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+		</Authorized>
+	</AuthorizeView>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <!-- INICIO -->
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
-            </NavLink>
-        </div>
+	<!-- Gestión de Personas -->
+	<AuthorizeView Roles="Administrador,Gerente">
+		<MudNavGroup Title="Gestión de Personas" Icon="@Icons.Material.Filled.Group" Expanded="false">
+			<MudNavLink Href="personas" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
+			<MudNavLink Href="estadocivil" Icon="@Icons.Material.Filled.Favorite">Estado Civil</MudNavLink>
+			<MudNavLink Href="Genero" Icon="@Icons.Material.Filled.Wc">Género</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- GESTIÓN DE PERSONAS - DESPLEGABLE (Solo Administradores y Gerentes) -->
-        <AuthorizeView Roles="Administrador,Gerente">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'personasSection')">
-                    <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span>
-                    Gestión de Personas
-                    <span class="bi bi-chevron-down collapse-arrow" id="personasArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="personasSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="personas">
-                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Usuarios
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="estadocivil">
-                            <span class="bi bi-heart-fill-nav-menu" aria-hidden="true"></span> Estado Civil
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="Genero">
-                            <span class="bi bi-gender-ambiguous-nav-menu" aria-hidden="true"></span> Género
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Gestión Laboral -->
+	<AuthorizeView Roles="Administrador,Gerente">
+		<MudNavGroup Title="Gestión Laboral" Icon="@Icons.Material.Filled.Schedule" Expanded="false">
+			<MudNavLink Href="turnotrabajo" Icon="@Icons.Material.Filled.AccessTime">Turno Trabajo</MudNavLink>
+			<MudNavLink Href="asignacion-turno" Icon="@Icons.Material.Filled.AssignmentTurnedIn">Asignación Turno</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- GESTIÓN LABORAL - DESPLEGABLE (Solo Administradores y Gerentes) -->
-        <AuthorizeView Roles="Administrador,Gerente">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'laboralSection')">
-                    <span class="bi bi-clock-fill-nav-menu" aria-hidden="true"></span>
-                    Gestión Laboral
-                    <span class="bi bi-chevron-down collapse-arrow" id="laboralArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="laboralSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="turnotrabajo">
-                            <span class="bi bi-clock-fill-nav-menu" aria-hidden="true"></span> Turno Trabajo
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="asignacion-turno">
-                            <span class="bi bi-calendar-check-fill-nav-menu" aria-hidden="true"></span> Asignación Turno
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Ubicación Geográfica -->
+	<AuthorizeView Roles="Administrador,Gerente">
+		<MudNavGroup Title="Ubicación Geográfica" Icon="@Icons.Material.Filled.LocationOn" Expanded="false">
+			<MudNavLink Href="sucursal" Icon="@Icons.Material.Filled.Business">Sucursales</MudNavLink>
+			<MudNavLink Href="departamento" Icon="@Icons.Material.Filled.Map">Departamento</MudNavLink>
+			<MudNavLink Href="municipio" Icon="@Icons.Material.Filled.LocationCity">Municipio</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- UBICACIÓN GEOGRÁFICA - DESPLEGABLE (Solo Administradores y Gerentes) -->
-        <AuthorizeView Roles="Administrador,Gerente">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'ubicacionSection')">
-                    <span class="bi bi-map-fill-nav-menu" aria-hidden="true"></span>
-                    Ubicación Geográfica
-                    <span class="bi bi-chevron-down collapse-arrow" id="ubicacionArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="ubicacionSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="sucursal">
-                            <span class="bi bi-building-fill-nav-menu" aria-hidden="true"></span> Sucursales
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="departamento">
-                            <span class="bi bi-map-fill-nav-menu" aria-hidden="true"></span> Departamento
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="municipio">
-                            <span class="bi bi-geo-alt-fill-nav-menu" aria-hidden="true"></span> Municipio
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Gestión de Productos -->
+	<AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
+		<MudNavGroup Title="Gestión de Productos" Icon="@Icons.Material.Filled.Medication" Expanded="false">
+			<MudNavLink Href="categoria" Icon="@Icons.Material.Filled.Category">Categorías</MudNavLink>
+			<MudNavLink Href="proveedor" Icon="@Icons.Material.Filled.LocalShipping">Proveedores</MudNavLink>
+			<MudNavLink Href="producto" Icon="@Icons.Material.Filled.Healing">Productos</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- GESTIÓN DE PRODUCTOS - DESPLEGABLE (Administradores, Gerentes y Farmacéuticos) -->
-        <AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'productosSection')">
-                    <span class="bi bi-capsule-pill-nav-menu" aria-hidden="true"></span>
-                    Gestión de Productos
-                    <span class="bi bi-chevron-down collapse-arrow" id="productosArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="productosSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="categoria">
-                            <span class="bi bi-tags-fill-nav-menu" aria-hidden="true"></span> Categorías
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="proveedor">
-                            <span class="bi bi-truck-nav-menu" aria-hidden="true"></span> Proveedores
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="producto">
-                            <span class="bi bi-capsule-pill-nav-menu" aria-hidden="true"></span> Productos
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Gestión de Inventarios -->
+	<AuthorizeView>
+		<MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
+			<MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- GESTIÓN DE INVENTARIOS - DESPLEGABLE (Todos los usuarios autenticados) -->
-        <AuthorizeView>
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'inventarioSection')">
-                    <span class="bi bi-box-seam-fill-nav-menu" aria-hidden="true"></span>
-                    Gestión de Inventarios
-                    <span class="bi bi-chevron-down collapse-arrow" id="inventarioArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="inventarioSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="inventario">
-                            <span class="bi bi-box-seam-fill-nav-menu" aria-hidden="true"></span> Inventarios
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Ventas -->
+	<AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
+		<MudNavGroup Title="Ventas" Icon="@Icons.Material.Filled.ShoppingCart" Expanded="false">
+			<MudNavLink Href="ventas" Icon="@Icons.Material.Filled.PointOfSale">Realizar Venta</MudNavLink>
+			<MudNavLink Href="historial-ventas" Icon="@Icons.Material.Filled.History">Historial de Ventas</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- VENTAS - DESPLEGABLE (Farmacéuticos, Cajeros y Vendedores) -->
-        <AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'ventasSection')">
-                    <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span>
-                    Ventas
-                    <span class="bi bi-chevron-down collapse-arrow" id="ventasArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="ventasSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="ventas">
-                            <span class="bi bi-cart-fill" aria-hidden="true"></span> Realizar Venta
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="historial-ventas">
-                            <span class="bi bi-clock-history" aria-hidden="true"></span> Historial de Ventas
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
+	<!-- Reportes -->
+	<AuthorizeView Roles="Administrador,Gerente">
+		<MudNavGroup Title="Reportes" Icon="@Icons.Material.Filled.Assessment" Expanded="false">
+			<MudNavLink Href="reporte-ventas" Icon="@Icons.Material.Filled.BarChart">Reporte de Ventas</MudNavLink>
+			<MudNavLink Href="reporte-inventario" Icon="@Icons.Material.Filled.Inventory2">Reporte de Inventario</MudNavLink>
+			<MudNavLink Href="reporte-usuarios" Icon="@Icons.Material.Filled.PeopleAlt">Reporte de Usuarios</MudNavLink>
+		</MudNavGroup>
+	</AuthorizeView>
 
-        <!-- REPORTES - DESPLEGABLE (Solo Administradores y Gerentes) -->
-        <AuthorizeView Roles="Administrador,Gerente">
-            <div class="nav-item px-3">
-                <div class="nav-section-toggle" onclick="toggleSection(event, 'reportesSection')">
-                    <span class="bi bi-graph-up-arrow" aria-hidden="true"></span>
-                    Reportes
-                    <span class="bi bi-chevron-down collapse-arrow" id="reportesArrow"></span>
-                </div>
-                <div class="nav-sub-section" id="reportesSection">
-                    <div class="nav-sub-menu">
-                        <NavLink class="nav-link nav-sub-link" href="reporte-ventas">
-                            <span class="bi bi-bar-chart-fill" aria-hidden="true"></span> Reporte de Ventas
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="reporte-inventario">
-                            <span class="bi bi-boxes" aria-hidden="true"></span> Reporte de Inventario
-                        </NavLink>
-                        <NavLink class="nav-link nav-sub-link" href="reporte-usuarios">
-                            <span class="bi bi-people" aria-hidden="true"></span> Reporte de Usuarios
-                        </NavLink>
-                    </div>
-                </div>
-            </div>
-        </AuthorizeView>
-    </nav>
-</div>
-
-<style>
-    /* Estilos para el menú desplegable */
-    .nav-section-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem 1rem;
-        color: #d7d7d7;
-        text-decoration: none;
-        cursor: pointer;
-        border: none;
-        background: transparent;
-        width: 100%;
-        transition: all 0.3s ease;
-        user-select: none;
-    }
-
-        .nav-section-toggle:hover {
-            color: #ffffff;
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-    .collapse-arrow {
-        transition: transform 0.3s ease;
-        font-size: 0.8rem;
-        margin-left: auto;
-    }
-
-        .collapse-arrow.rotated {
-            transform: rotate(180deg);
-        }
-
-    .nav-sub-section {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease;
-    }
-
-        .nav-sub-section.expanded {
-            max-height: 500px;
-        }
-
-    .nav-sub-menu {
-        padding-left: 1rem;
-        border-left: 2px solid rgba(255, 255, 255, 0.1);
-        margin-left: 1rem;
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-    }
-
-    .nav-sub-link {
-        padding: 0.375rem 1rem !important;
-        font-size: 0.9rem;
-        color: #b3b3b3 !important;
-        transition: all 0.3s ease;
-        display: block;
-    }
-
-        .nav-sub-link:hover {
-            color: #ffffff !important;
-            background-color: rgba(255, 255, 255, 0.05);
-            padding-left: 1.25rem !important;
-        }
-
-        .nav-sub-link.active {
-            color: #ffffff !important;
-            background-color: rgba(255, 255, 255, 0.15);
-        }
-
-    /* Espaciado entre secciones */
-    .nav-item {
-        margin-bottom: 0.25rem;
-    }
-
-    /* Prevenir la propagación del click en el nav-scrollable */
-    .nav-section-toggle {
-        position: relative;
-        z-index: 10;
-    }
-
-    /* Estilos para el área de usuario */
-    .top-row {
-        background-color: rgba(0,0,0,0.4);
-        padding: 0.5rem 1rem;
-    }
-
-    .navbar-brand {
-        font-size: 1.1rem;
-        font-weight: 600;
-    }
-
-    /* Botón de logout */
-    .btn-outline-light {
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        transition: all 0.3s ease;
-    }
-
-        .btn-outline-light:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-</style>
-
-<script>
-    function toggleSection(event, sectionId) {
-        // Prevenir la propagación del evento para que no cierre el menú principal
-        event.stopPropagation();
-
-        const section = document.getElementById(sectionId);
-        const arrow = document.getElementById(sectionId.replace('Section', 'Arrow'));
-
-        // Cerrar todas las otras secciones
-        const allSections = document.querySelectorAll('.nav-sub-section');
-        const allArrows = document.querySelectorAll('.collapse-arrow');
-
-        allSections.forEach(otherSection => {
-            if (otherSection.id !== sectionId) {
-                otherSection.classList.remove('expanded');
-            }
-        });
-
-        allArrows.forEach(otherArrow => {
-            if (otherArrow.id !== arrow.id) {
-                otherArrow.classList.remove('rotated');
-            }
-        });
-
-        // Toggle la sección actual
-        section.classList.toggle('expanded');
-        arrow.classList.toggle('rotated');
-    }
-
-    // Función para cerrar todos los menús desplegables cuando se hace click fuera
-    document.addEventListener('click', function(event) {
-        const navScrollable = document.querySelector('.nav-scrollable');
-        const toggles = document.querySelectorAll('.nav-section-toggle');
-
-        // Si el click no es en un toggle, cerrar todos los menús
-        let isToggleClick = false;
-        toggles.forEach(toggle => {
-            if (toggle.contains(event.target)) {
-                isToggleClick = true;
-            }
-        });
-
-        if (!isToggleClick && !event.target.closest('.nav-sub-menu')) {
-            const allSections = document.querySelectorAll('.nav-sub-section');
-            const allArrows = document.querySelectorAll('.collapse-arrow');
-
-            allSections.forEach(section => {
-                section.classList.remove('expanded');
-            });
-
-            allArrows.forEach(arrow => {
-                arrow.classList.remove('rotated');
-            });
-        }
-    });
-</script>
+</MudNavMenu>
 
 @code {
-    private string GetUserName()
-    {
-        var authState = AuthProvider.GetAuthenticationStateAsync().Result;
-        return authState.User.FindFirst("nombre")?.Value ?? "Usuario";
-    }
+	private string _nombreUsuario = string.Empty;
 
-    private string GetUserRole()
-    {
-        var authState = AuthProvider.GetAuthenticationStateAsync().Result;
-        return authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Sin rol";
-    }
+	protected override async Task OnInitializedAsync()
+	{
+		await ActualizarDatosUsuario();
 
-    private async Task Logout()
-    {
-        try
-        {
-            // Limpiar el token del sessionStorage
-            await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
+		// Suscribirse a cambios de autenticación
+		AuthStateProvider.AuthenticationStateChanged += AuthenticationStateChangedHandler;
+	}
 
-            // Actualizar el estado de autenticación
-            var customAuthProvider = AuthProvider as CustomAuthenticationStateProvider;
-            if (customAuthProvider != null)
-            {
-                await customAuthProvider.SetTokenAsync(null);
-            }
+	private async Task ActualizarDatosUsuario()
+	{
+		try
+		{
+			AuthenticationState authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+			ClaimsPrincipal user = authState?.User;
 
-            // Redirigir al login
-            Navigation.NavigateTo("/login", true);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error durante logout: {ex.Message}");
-            // En caso de error, forzar la redirección
-            Navigation.NavigateTo("/login", true);
-        }
-    }
+			if (user != null && user.Identity != null && user.Identity.IsAuthenticated)
+			{
+				_nombreUsuario = user.Claims
+					.FirstOrDefault(claim => claim.Type == "nombre")?.Value ?? "Usuario";
+			}
+			else
+			{
+				_nombreUsuario = string.Empty;
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error en ActualizarDatosUsuario: {ex.Message}");
+			_nombreUsuario = "Usuario";
+		}
+	}
+
+	private async void AuthenticationStateChangedHandler(Task<AuthenticationState> task)
+	{
+		try
+		{
+			var authState = await task;
+			await ActualizarDatosUsuario();
+			await InvokeAsync(() => StateHasChanged());
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error en AuthenticationStateChangedHandler: {ex.Message}");
+		}
+	}
+
+	private string GetUserName()
+	{
+		var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().Result;
+		return authState.User.FindFirst("nombre")?.Value ?? "Usuario";
+	}
+
+	private string GetUserRole()
+	{
+		var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().Result;
+		return authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Sin rol";
+	}
+
+	public void Dispose()
+	{
+		// Limpiar la suscripción al desmontar el componente
+		AuthStateProvider.AuthenticationStateChanged -= AuthenticationStateChangedHandler;
+	}
 }
