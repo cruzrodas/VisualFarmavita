@@ -2,294 +2,233 @@
 using Microsoft.JSInterop;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text.Json;
-using Microsoft.AspNetCore.Components;
 
-public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IDisposable
+namespace ProyectoFarmaVita.Services.LoginServices
 {
-    private readonly IJSRuntime _jsRuntime;
-    private readonly NavigationManager _navigationManager;
-    private readonly ILogger<CustomAuthenticationStateProvider> _logger;
-
-    private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
-    private DotNetObjectReference<CustomAuthenticationStateProvider>? _dotNetRef;
-    private bool _isInitialized = false;
-    private bool _disposed = false;
-    private Timer? _tokenRenewalTimer;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-
-    public CustomAuthenticationStateProvider(
-        IJSRuntime jsRuntime,
-        NavigationManager navigationManager,
-        ILogger<CustomAuthenticationStateProvider> logger)
+    public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IDisposable
     {
-        _jsRuntime = jsRuntime;
-        _navigationManager = navigationManager;
-        _logger = logger;
-    }
+        private readonly IJSRuntime _jsRuntime;
+        private bool _disposed = false;
+        private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
 
-    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
-    {
-        if (_disposed)
+        public CustomAuthenticationStateProvider(IJSRuntime jsRuntime)
         {
-            _logger.LogWarning("⚠️ AuthenticationStateProvider ya fue disposed");
-            return new AuthenticationState(_currentUser);
+            _jsRuntime = jsRuntime;
         }
 
-        await _semaphore.WaitAsync();
-        try
+        public override async Task<AuthenticationState> GetAuthenticationStateAsync()
         {
-            // Solo intentar obtener token si no estamos en prerendering
-            if (_isInitialized)
+            try
             {
-                await InitializeIfNeededAsync();
+                // Durante prerendering, no podemos acceder al localStorage
+                var token = await GetTokenAsync();
+
+                if (string.IsNullOrEmpty(token))
+                {
+                    Console.WriteLine("🔍 No hay token - Usuario no autenticado");
+                    _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                    return new AuthenticationState(_currentUser);
+                }
+
+                var claims = ParseClaimsFromJwt(token);
+                if (claims == null || !claims.Any())
+                {
+                    Console.WriteLine("🔍 Token inválido o sin claims");
+                    await RemoveTokenAsync();
+                    _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                    return new AuthenticationState(_currentUser);
+                }
+
+                // Verificar si el token ha expirado
+                var expiryClaim = claims.FirstOrDefault(x => x.Type == "exp");
+                if (expiryClaim != null)
+                {
+                    var expiryDateUnix = long.Parse(expiryClaim.Value);
+                    var expiryDate = DateTimeOffset.FromUnixTimeSeconds(expiryDateUnix);
+
+                    if (expiryDate <= DateTimeOffset.UtcNow)
+                    {
+                        Console.WriteLine("🔍 Token expirado");
+                        await RemoveTokenAsync();
+                        _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                        return new AuthenticationState(_currentUser);
+                    }
+                }
+
+                var identity = new ClaimsIdentity(claims, "jwt");
+                _currentUser = new ClaimsPrincipal(identity);
+
+                Console.WriteLine($"✅ Usuario autenticado: {_currentUser.FindFirst("nombre")?.Value ?? "Sin nombre"}");
+                Console.WriteLine($"✅ Rol: {_currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol"}");
+
+                return new AuthenticationState(_currentUser);
             }
-
-            var authState = new AuthenticationState(_currentUser);
-            _logger.LogInformation($"👤 Estado de autenticación: {_currentUser.Identity?.IsAuthenticated ?? false}");
-
-            return authState;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error verificando autenticación");
-            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
-    }
-
-    private async Task InitializeIfNeededAsync()
-    {
-        if (_disposed) return;
-
-        try
-        {
-            _logger.LogInformation("🔍 Obteniendo token del sessionStorage...");
-
-            var token = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "authToken");
-
-            if (!string.IsNullOrEmpty(token))
+            catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
             {
-                _logger.LogInformation("✅ Token encontrado en sessionStorage");
-                await ProcessTokenAsync(token);
-            }
-            else
-            {
-                _logger.LogInformation("ℹ️ No hay token en sessionStorage");
+                // Durante prerendering, retornamos usuario no autenticado
+                Console.WriteLine("🔍 JSInterop no disponible durante prerendering - Usuario no autenticado");
                 _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                return new AuthenticationState(_currentUser);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error en GetAuthenticationStateAsync: {ex.Message}");
+                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                return new AuthenticationState(_currentUser);
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("statically rendered"))
-        {
-            _logger.LogDebug("⏳ Esperando completar el renderizado antes de acceder a JavaScript");
-            // No es un error real, solo necesitamos esperar
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error obteniendo token del sessionStorage");
-            _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-        }
-    }
 
-    public async Task SetTokenAsync(string? token)
-    {
-        if (_disposed)
+        public async Task SetTokenAsync(string token)
         {
-            _logger.LogWarning("⚠️ Intento de SetToken en provider disposed");
-            return;
-        }
-
-        await _semaphore.WaitAsync();
-        try
-        {
-            _logger.LogInformation($"🔑 Estableciendo nuevo token de autenticación");
-
-            if (string.IsNullOrEmpty(token))
+            try
             {
-                // Limpiar autenticación
-                _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
+                Console.WriteLine("💾 Guardando token...");
+
+                if (string.IsNullOrEmpty(token))
+                {
+                    await RemoveTokenAsync();
+                    return;
+                }
+
+                // Solo intentar guardar si JSInterop está disponible
+                try
+                {
+                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", token);
+                    Console.WriteLine("✅ Token guardado en localStorage");
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
+                {
+                    Console.WriteLine("⚠️ No se puede guardar en localStorage durante prerendering");
+                    // Continuamos sin error - el token se guardará cuando JSInterop esté disponible
+                }
+
+                // Actualizar el estado de autenticación inmediatamente
+                var claims = ParseClaimsFromJwt(token);
+                if (claims != null && claims.Any())
+                {
+                    var identity = new ClaimsIdentity(claims, "jwt");
+                    _currentUser = new ClaimsPrincipal(identity);
+
+                    Console.WriteLine("✅ Estado de autenticación actualizado en memoria");
+                    NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al guardar token: {ex.Message}");
+            }
+        }
+
+        public async Task<string> GetTokenAsync()
+        {
+            try
+            {
+                // Verificar si JSInterop está disponible
+                if (_jsRuntime is IJSInProcessRuntime)
+                {
+                    var token = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+                    return token ?? string.Empty;
+                }
+                else
+                {
+                    // Durante prerendering, JSInterop no está disponible
+                    Console.WriteLine("🔍 JSInterop no disponible durante prerendering");
+                    return string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al obtener token: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        public async Task RemoveTokenAsync()
+        {
+            try
+            {
+                Console.WriteLine("🗑️ Removiendo token...");
 
                 try
                 {
-                    await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
-                    _logger.LogInformation("🗑️ Token removido del sessionStorage");
+                    await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                    Console.WriteLine("✅ Token removido del localStorage");
                 }
-                catch (Exception ex)
+                catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop"))
                 {
-                    _logger.LogWarning(ex, "⚠️ Error removiendo token del sessionStorage");
+                    Console.WriteLine("⚠️ No se puede acceder a localStorage durante prerendering");
                 }
 
-                StopTokenRenewalTimer();
-            }
-            else
-            {
-                // Establecer nueva autenticación
-                await ProcessTokenAsync(token);
-
-                try
-                {
-                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "authToken", token);
-                    _logger.LogInformation("💾 Token guardado en sessionStorage");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "⚠️ Error guardando token en sessionStorage");
-                }
-
-                StartTokenRenewalTimer(token);
-            }
-
-            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
-            _logger.LogInformation($"🔔 Estado de autenticación notificado: {_currentUser.Identity?.IsAuthenticated ?? false}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error en SetTokenAsync");
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
-    }
-
-    private async Task ProcessTokenAsync(string token)
-    {
-        if (_disposed) return;
-
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-
-            // Verificar si el token ha expirado
-            if (jwtToken.ValidTo < DateTime.UtcNow)
-            {
-                _logger.LogWarning("⚠️ Token expirado");
                 _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-                return;
+
+                NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+                Console.WriteLine("✅ Estado de autenticación limpiado");
             }
-
-            // Extraer claims del token
-            var claims = jwtToken.Claims.ToList();
-            _logger.LogInformation($"📝 Claims extraídos: {claims.Count}");
-
-            var identity = new ClaimsIdentity(claims, "jwt");
-            _currentUser = new ClaimsPrincipal(identity);
-
-            _logger.LogInformation($"✅ Usuario autenticado: {_currentUser.Identity?.Name ?? "Sin nombre"}");
-            _logger.LogInformation($"👤 Rol: {_currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol"}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error procesando token JWT");
-            _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-        }
-    }
-
-    private void StartTokenRenewalTimer(string token)
-    {
-        if (_disposed) return;
-
-        try
-        {
-            StopTokenRenewalTimer();
-
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-            var expiryTime = jwtToken.ValidTo;
-            var renewalTime = expiryTime.AddMinutes(-5); // Renovar 5 minutos antes de expirar
-            var delay = renewalTime - DateTime.UtcNow;
-
-            if (delay > TimeSpan.Zero)
+            catch (Exception ex)
             {
-                _tokenRenewalTimer = new Timer(async _ => await RenewTokenAsync(), null, delay, TimeSpan.FromMilliseconds(-1));
-                _logger.LogInformation($"⏰ Timer de renovación configurado para: {renewalTime:HH:mm:ss}");
+                Console.WriteLine($"❌ Error al remover token: {ex.Message}");
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error configurando timer de renovación");
-        }
-    }
 
-    private async Task RenewTokenAsync()
-    {
-        if (_disposed) return;
-
-        try
+        public async Task InitializeAsync()
         {
-            _logger.LogInformation("🔄 Renovando token...");
-            // Aquí puedes implementar la lógica de renovación si la tienes
-            // Por ahora, simplemente loggeamos que se intentó renovar
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error renovando token");
-        }
-    }
-
-    private void StopTokenRenewalTimer()
-    {
-        if (_tokenRenewalTimer != null)
-        {
-            _tokenRenewalTimer.Dispose();
-            _tokenRenewalTimer = null;
-            _logger.LogDebug("⏹️ Timer de renovación de token detenido");
-        }
-    }
-
-    // Método para inicializar después del primer render
-    public async Task InitializeAsync()
-    {
-        if (_disposed) return;
-
-        await _semaphore.WaitAsync();
-        try
-        {
-            if (!_isInitialized)
+            try
             {
-                _logger.LogInformation("🚀 Inicializando CustomAuthenticationStateProvider...");
-                _isInitialized = true;
-
-                // Intentar obtener el token del sessionStorage
-                await InitializeIfNeededAsync();
-
-                // Notificar el estado inicial
-                NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+                Console.WriteLine("🚀 Inicializando AuthenticationStateProvider...");
+                var authState = await GetAuthenticationStateAsync();
+                NotifyAuthenticationStateChanged(Task.FromResult(authState));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al inicializar: {ex.Message}");
             }
         }
-        catch (Exception ex)
+
+        public async Task LogoutAsync()
         {
-            _logger.LogError(ex, "❌ Error en InitializeAsync");
+            await RemoveTokenAsync();
         }
-        finally
+
+        private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
         {
-            _semaphore.Release();
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jsonToken = handler.ReadJwtToken(jwt);
+
+                var claims = jsonToken.Claims.ToList();
+
+                // Agregar claim de Name si no existe
+                if (!claims.Any(c => c.Type == ClaimTypes.Name))
+                {
+                    var nombreClaim = claims.FirstOrDefault(c => c.Type == "nombre");
+                    if (nombreClaim != null)
+                    {
+                        claims.Add(new Claim(ClaimTypes.Name, nombreClaim.Value));
+                    }
+                }
+
+                Console.WriteLine($"🔍 Claims parseados: {claims.Count}");
+                foreach (var claim in claims)
+                {
+                    Console.WriteLine($"   - {claim.Type}: {claim.Value}");
+                }
+
+                return claims;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al parsear JWT: {ex.Message}");
+                return new List<Claim>();
+            }
         }
-    }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        _disposed = true;
-        _logger.LogInformation("🗑️ CustomAuthenticationStateProvider disposed");
-
-        try
+        public void Dispose()
         {
-            StopTokenRenewalTimer();
-
-            _dotNetRef?.Dispose();
-            _dotNetRef = null;
-
-            _semaphore?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error durante dispose");
+            if (!_disposed)
+            {
+                _disposed = true;
+            }
         }
     }
 }

@@ -1,145 +1,214 @@
 ﻿@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@using ProyectoFarmaVita.Services.LoginServices
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject CustomAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 @attribute [Authorize]
 @implements IDisposable
 
 <MudNavMenu Style="background-color: white;">
 
-	<!-- Dashboard/Home -->
-	<AuthorizeView>
-		<Authorized>
-			<MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-		</Authorized>
-	</AuthorizeView>
+    <!-- Información del Usuario -->
+    <AuthorizeView>
+        <Authorized>
+            <MudPaper Class="pa-4 mb-3" Elevation="2" Style="background: linear-gradient(135deg, #03346c 0%, #024590 100%); color: white;">
+                <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                    <MudAvatar Size="Size.Medium" Color="Color.Primary">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" />
+                    </MudAvatar>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;" Align="Align.Center">
+                        @_nombreUsuario
+                    </MudText>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
+                        @_rolUsuario
+                    </MudChip>
+                </MudStack>
+            </MudPaper>
+        </Authorized>
+        <NotAuthorized>
+            <MudPaper Class="pa-4 mb-3" Elevation="2" Style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white;">
+                <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Large" />
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">
+                        No autenticado
+                    </MudText>
+                </MudStack>
+            </MudPaper>
+        </NotAuthorized>
+    </AuthorizeView>
 
-	<!-- Gestión de Personas -->
-	<AuthorizeView Roles="Administrador,Gerente">
-		<MudNavGroup Title="Gestión de Personas" Icon="@Icons.Material.Filled.Group" Expanded="false">
-			<MudNavLink Href="personas" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
-			<MudNavLink Href="estadocivil" Icon="@Icons.Material.Filled.Favorite">Estado Civil</MudNavLink>
-			<MudNavLink Href="Genero" Icon="@Icons.Material.Filled.Wc">Género</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Dashboard/Home -->
+    <AuthorizeView>
+        <Authorized>
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 
-	<!-- Gestión Laboral -->
-	<AuthorizeView Roles="Administrador,Gerente">
-		<MudNavGroup Title="Gestión Laboral" Icon="@Icons.Material.Filled.Schedule" Expanded="false">
-			<MudNavLink Href="turnotrabajo" Icon="@Icons.Material.Filled.AccessTime">Turno Trabajo</MudNavLink>
-			<MudNavLink Href="asignacion-turno" Icon="@Icons.Material.Filled.AssignmentTurnedIn">Asignación Turno</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Gestión de Personas -->
+    <AuthorizeView Roles="Administrador,Gerente">
+        <MudNavGroup Title="Gestión de Personas" Icon="@Icons.Material.Filled.Group" Expanded="false">
+            <MudNavLink Href="personas" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
+            <MudNavLink Href="estadocivil" Icon="@Icons.Material.Filled.Favorite">Estado Civil</MudNavLink>
+            <MudNavLink Href="Genero" Icon="@Icons.Material.Filled.Wc">Género</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 
-	<!-- Ubicación Geográfica -->
-	<AuthorizeView Roles="Administrador,Gerente">
-		<MudNavGroup Title="Ubicación Geográfica" Icon="@Icons.Material.Filled.LocationOn" Expanded="false">
-			<MudNavLink Href="sucursal" Icon="@Icons.Material.Filled.Business">Sucursales</MudNavLink>
-			<MudNavLink Href="departamento" Icon="@Icons.Material.Filled.Map">Departamento</MudNavLink>
-			<MudNavLink Href="municipio" Icon="@Icons.Material.Filled.LocationCity">Municipio</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Gestión Laboral -->
+    <AuthorizeView Roles="Administrador,Gerente">
+        <MudNavGroup Title="Gestión Laboral" Icon="@Icons.Material.Filled.Schedule" Expanded="false">
+            <MudNavLink Href="turnotrabajo" Icon="@Icons.Material.Filled.AccessTime">Turno Trabajo</MudNavLink>
+            <MudNavLink Href="asignacion-turno" Icon="@Icons.Material.Filled.AssignmentTurnedIn">Asignación Turno</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 
-	<!-- Gestión de Productos -->
-	<AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
-		<MudNavGroup Title="Gestión de Productos" Icon="@Icons.Material.Filled.Medication" Expanded="false">
-			<MudNavLink Href="categoria" Icon="@Icons.Material.Filled.Category">Categorías</MudNavLink>
-			<MudNavLink Href="proveedor" Icon="@Icons.Material.Filled.LocalShipping">Proveedores</MudNavLink>
-			<MudNavLink Href="producto" Icon="@Icons.Material.Filled.Healing">Productos</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Ubicación Geográfica -->
+    <AuthorizeView Roles="Administrador,Gerente">
+        <MudNavGroup Title="Ubicación Geográfica" Icon="@Icons.Material.Filled.LocationOn" Expanded="false">
+            <MudNavLink Href="sucursal" Icon="@Icons.Material.Filled.Business">Sucursales</MudNavLink>
+            <MudNavLink Href="departamento" Icon="@Icons.Material.Filled.Map">Departamento</MudNavLink>
+            <MudNavLink Href="municipio" Icon="@Icons.Material.Filled.LocationCity">Municipio</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 
-	<!-- Gestión de Inventarios -->
-	<AuthorizeView>
-		<MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
-			<MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Gestión de Productos -->
+    <AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
+        <MudNavGroup Title="Gestión de Productos" Icon="@Icons.Material.Filled.Medication" Expanded="false">
+            <MudNavLink Href="categoria" Icon="@Icons.Material.Filled.Category">Categorías</MudNavLink>
+            <MudNavLink Href="proveedor" Icon="@Icons.Material.Filled.LocalShipping">Proveedores</MudNavLink>
+            <MudNavLink Href="producto" Icon="@Icons.Material.Filled.Healing">Productos</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 
-	<!-- Ventas -->
-	<AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
-		<MudNavGroup Title="Ventas" Icon="@Icons.Material.Filled.ShoppingCart" Expanded="false">
-			<MudNavLink Href="ventas" Icon="@Icons.Material.Filled.PointOfSale">Realizar Venta</MudNavLink>
-			<MudNavLink Href="historial-ventas" Icon="@Icons.Material.Filled.History">Historial de Ventas</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Gestión de Inventarios -->
+    <AuthorizeView>
+        <MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
+            <MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 
-	<!-- Reportes -->
-	<AuthorizeView Roles="Administrador,Gerente">
-		<MudNavGroup Title="Reportes" Icon="@Icons.Material.Filled.Assessment" Expanded="false">
-			<MudNavLink Href="reporte-ventas" Icon="@Icons.Material.Filled.BarChart">Reporte de Ventas</MudNavLink>
-			<MudNavLink Href="reporte-inventario" Icon="@Icons.Material.Filled.Inventory2">Reporte de Inventario</MudNavLink>
-			<MudNavLink Href="reporte-usuarios" Icon="@Icons.Material.Filled.PeopleAlt">Reporte de Usuarios</MudNavLink>
-		</MudNavGroup>
-	</AuthorizeView>
+    <!-- Ventas -->
+    <AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
+        <MudNavGroup Title="Ventas" Icon="@Icons.Material.Filled.ShoppingCart" Expanded="false">
+            <MudNavLink Href="ventas" Icon="@Icons.Material.Filled.PointOfSale">Realizar Venta</MudNavLink>
+            <MudNavLink Href="historial-ventas" Icon="@Icons.Material.Filled.History">Historial de Ventas</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
+    <!-- Reportes -->
+    <AuthorizeView Roles="Administrador,Gerente">
+        <MudNavGroup Title="Reportes" Icon="@Icons.Material.Filled.Assessment" Expanded="false">
+            <MudNavLink Href="reporte-ventas" Icon="@Icons.Material.Filled.BarChart">Reporte de Ventas</MudNavLink>
+            <MudNavLink Href="reporte-inventario" Icon="@Icons.Material.Filled.Inventory2">Reporte de Inventario</MudNavLink>
+            <MudNavLink Href="reporte-usuarios" Icon="@Icons.Material.Filled.PeopleAlt">Reporte de Usuarios</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
+    <!-- Botón de Logout -->
+    <AuthorizeView>
+        <Authorized>
+            <MudDivider Class="my-3" />
+            <MudNavLink OnClick="@HandleLogout" Icon="@Icons.Material.Filled.Logout"
+                        Style="color: #dc3545; cursor: pointer;">
+                Cerrar Sesión
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 
 </MudNavMenu>
 
 @code {
-	private string _nombreUsuario = string.Empty;
+    private string _nombreUsuario = string.Empty;
+    private string _rolUsuario = string.Empty;
+    private bool _disposed = false;
 
-	protected override async Task OnInitializedAsync()
-	{
-		await ActualizarDatosUsuario();
+    protected override async Task OnInitializedAsync()
+    {
+        await ActualizarDatosUsuario();
 
-		// Suscribirse a cambios de autenticación
-		AuthStateProvider.AuthenticationStateChanged += AuthenticationStateChangedHandler;
-	}
+        // Suscribirse a cambios de autenticación
+        AuthStateProvider.AuthenticationStateChanged += AuthenticationStateChangedHandler;
+    }
 
-	private async Task ActualizarDatosUsuario()
-	{
-		try
-		{
-			AuthenticationState authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-			ClaimsPrincipal user = authState?.User;
+    private async Task ActualizarDatosUsuario()
+    {
+        try
+        {
+            AuthenticationState authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            ClaimsPrincipal user = authState?.User;
 
-			if (user != null && user.Identity != null && user.Identity.IsAuthenticated)
-			{
-				_nombreUsuario = user.Claims
-					.FirstOrDefault(claim => claim.Type == "nombre")?.Value ?? "Usuario";
-			}
-			else
-			{
-				_nombreUsuario = string.Empty;
-			}
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"Error en ActualizarDatosUsuario: {ex.Message}");
-			_nombreUsuario = "Usuario";
-		}
-	}
+            if (user != null && user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                _nombreUsuario = user.Claims
+                    .FirstOrDefault(claim => claim.Type == "nombre")?.Value ??
+                    user.Identity.Name ?? "Usuario";
 
-	private async void AuthenticationStateChangedHandler(Task<AuthenticationState> task)
-	{
-		try
-		{
-			var authState = await task;
-			await ActualizarDatosUsuario();
-			await InvokeAsync(() => StateHasChanged());
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"Error en AuthenticationStateChangedHandler: {ex.Message}");
-		}
-	}
+                _rolUsuario = user.Claims
+                    .FirstOrDefault(claim => claim.Type == System.Security.Claims.ClaimTypes.Role)?.Value ?? "Sin rol";
 
-	private string GetUserName()
-	{
-		var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().Result;
-		return authState.User.FindFirst("nombre")?.Value ?? "Usuario";
-	}
+                Console.WriteLine($"👤 Usuario actualizado: {_nombreUsuario} - {_rolUsuario}");
+            }
+            else
+            {
+                _nombreUsuario = string.Empty;
+                _rolUsuario = string.Empty;
+                Console.WriteLine("❌ Usuario no autenticado en ActualizarDatosUsuario");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en ActualizarDatosUsuario: {ex.Message}");
+            _nombreUsuario = "Usuario";
+            _rolUsuario = "Error";
+        }
+    }
 
-	private string GetUserRole()
-	{
-		var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().Result;
-		return authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Sin rol";
-	}
+    private async void AuthenticationStateChangedHandler(Task<AuthenticationState> task)
+    {
+        if (_disposed) return;
 
-	public void Dispose()
-	{
-		// Limpiar la suscripción al desmontar el componente
-		AuthStateProvider.AuthenticationStateChanged -= AuthenticationStateChangedHandler;
-	}
+        try
+        {
+            var authState = await task;
+            await ActualizarDatosUsuario();
+
+            if (!_disposed)
+            {
+                await InvokeAsync(() => StateHasChanged());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en AuthenticationStateChangedHandler: {ex.Message}");
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        try
+        {
+            Console.WriteLine("🚪 Cerrando sesión...");
+
+            // Limpiar token
+            await AuthStateProvider.LogoutAsync();
+
+            // Redirigir al login
+            NavigationManager.NavigateTo("/login", replace: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error al cerrar sesión: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            // Limpiar la suscripción al desmontar el componente
+            AuthStateProvider.AuthenticationStateChanged -= AuthenticationStateChangedHandler;
+        }
+    }
 }

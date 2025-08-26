@@ -8,233 +8,37 @@
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
     <MudGrid>
-        <!-- Header de bienvenida -->
+        <!-- Header de bienvenida simple -->
         <MudItem xs="12">
             <MudPaper Elevation="3" Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white;">
-                <MudGrid AlignItems="Center">
-                    <MudItem xs="12" md="8">
-                        <MudStack>
+                <MudGrid AlignItems="Center" Justify="Justify.Center">
+                    <MudItem xs="12" Class="text-center">
+                        <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalPharmacy" Size="Size.Large" Style="font-size: 4rem;" />
                             <MudText Typo="Typo.h3" Style="font-weight: 600;">
                                 ¡Bienvenido a FarmaVita!
                             </MudText>
-                            <MudText Typo="Typo.h6" Style="opacity: 0.9;">
-                                Sistema de Gestión Farmacéutica
-                            </MudText>
                             <AuthorizeView>
                                 <Authorized>
-                                    <MudText Typo="Typo.body1" Class="mt-2">
-                                        Hola, <strong>@GetUserName()</strong> - Rol: <strong>@GetUserRole()</strong>
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Style="opacity: 0.8;">
-                                        Último acceso: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+                                    <MudText Typo="Typo.h5" Class="mt-2">
+                                        Hola, <strong>@GetUserName()</strong>
                                     </MudText>
                                 </Authorized>
                             </AuthorizeView>
                         </MudStack>
                     </MudItem>
-                    <MudItem xs="12" md="4" Class="text-center">
-                        <MudIcon Icon="@Icons.Material.Filled.LocalPharmacy" Size="Size.Large" Style="font-size: 4rem;" />
-                    </MudItem>
                 </MudGrid>
             </MudPaper>
         </MudItem>
-
-        <!-- Accesos rápidos según el rol -->
-        <AuthorizeView Roles="Administrador,Gerente">
-            <Authorized>
-                <!-- Dashboard para Administradores y Gerentes -->
-                <MudItem xs="12">
-                    <MudText Typo="Typo.h5" Class="mb-3">Panel de Administración</MudText>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="3">
-                    <MudCard Elevation="3" Class="dashboard-card" Style="height: 120px;">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Large" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Gestión de Personal</MudText>
-                            <MudButton Href="/personas" Variant="Variant.Text" Size="Size.Small">Ver</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="3">
-                    <MudCard Elevation="3" Class="dashboard-card" Style="height: 120px;">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Color="Color.Secondary" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Sucursales</MudText>
-                            <MudButton Href="/sucursal" Variant="Variant.Text" Size="Size.Small">Ver</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="3">
-                    <MudCard Elevation="3" Class="dashboard-card" Style="height: 120px;">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.Inventory" Size="Size.Large" Color="Color.Info" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Inventarios</MudText>
-                            <MudButton Href="/inventario" Variant="Variant.Text" Size="Size.Small">Ver</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="3">
-                    <MudCard Elevation="3" Class="dashboard-card" Style="height: 120px;">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.Analytics" Size="Size.Large" Color="Color.Warning" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Reportes</MudText>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Disabled>Próximamente</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-            </Authorized>
-        </AuthorizeView>
-
-        <AuthorizeView Roles="Farmaceuta">
-            <Authorized>
-                <!-- Dashboard para Farmacéuticos -->
-                <MudItem xs="12">
-                    <MudText Typo="Typo.h5" Class="mb-3">Panel Farmacéutico</MudText>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="3" Class="dashboard-card">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.MedicalServices" Size="Size.Large" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Productos</MudText>
-                            <MudButton Href="/producto" Variant="Variant.Text" Size="Size.Small">Ver</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="3" Class="dashboard-card">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Info" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Inventario</MudText>
-                            <MudButton Href="/inventario" Variant="Variant.Text" Size="Size.Small">Ver</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="3" Class="dashboard-card">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Size="Size.Large" Color="Color.Success" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Ventas</MudText>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Disabled>Próximamente</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-            </Authorized>
-        </AuthorizeView>
-
-        <AuthorizeView Roles="Cajero">
-            <Authorized>
-                <!-- Dashboard para Cajeros -->
-                <MudItem xs="12">
-                    <MudText Typo="Typo.h5" Class="mb-3">Panel de Caja</MudText>
-                </MudItem>
-
-                <MudItem xs="12" sm="6">
-                    <MudCard Elevation="3" Class="dashboard-card">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.PointOfSale" Size="Size.Large" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Punto de Venta</MudText>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Disabled>Próximamente</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6">
-                    <MudCard Elevation="3" Class="dashboard-card">
-                        <MudCardContent Class="d-flex align-center justify-center flex-column">
-                            <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Info" />
-                            <MudText Typo="Typo.h6" Class="mt-2">Historial de Ventas</MudText>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Disabled>Próximamente</MudButton>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-            </Authorized>
-        </AuthorizeView>
-
-        <!-- Información general para todos los usuarios -->
-        <MudItem xs="12">
-            <MudDivider Class="my-4" />
-            <MudText Typo="Typo.h5" Class="mb-3">Acceso Rápido</MudText>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2" Class="quick-access-card">
-                <MudCardContent Class="text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Medium" Color="Color.Primary" />
-                    <MudText Typo="Typo.subtitle1" Class="mt-2">Categorías</MudText>
-                    <MudButton Href="/categoria" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">Ver</MudButton>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2" Class="quick-access-card">
-                <MudCardContent Class="text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Medium" Color="Color.Secondary" />
-                    <MudText Typo="Typo.subtitle1" Class="mt-2">Proveedores</MudText>
-                    <MudButton Href="/proveedor" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">Ver</MudButton>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2" Class="quick-access-card">
-                <MudCardContent Class="text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Medium" Color="Color.Info" />
-                    <MudText Typo="Typo.subtitle1" Class="mt-2">Turnos</MudText>
-                    <MudButton Href="/turnotrabajo" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">Ver</MudButton>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2" Class="quick-access-card">
-                <MudCardContent Class="text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Medium" Color="Color.Warning" />
-                    <MudText Typo="Typo.subtitle1" Class="mt-2">Asignaciones</MudText>
-                    <MudButton Href="/asignacion-turno" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">Ver</MudButton>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
     </MudGrid>
 </MudContainer>
-
-<style>
-    .dashboard-card {
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        cursor: pointer;
-    }
-
-        .dashboard-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-    .quick-access-card {
-        transition: transform 0.2s ease;
-    }
-
-        .quick-access-card:hover {
-            transform: translateY(-2px);
-        }
-</style>
 
 @code {
     private string GetUserName()
     {
         var authState = AuthProvider.GetAuthenticationStateAsync().Result;
-        return authState.User.FindFirst("nombre")?.Value ?? "Usuario";
-    }
-
-    private string GetUserRole()
-    {
-        var authState = AuthProvider.GetAuthenticationStateAsync().Result;
-        return authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Sin rol";
+        return authState.User.FindFirst("nombre")?.Value ??
+               authState.User.Identity?.Name ??
+               "Usuario";
     }
 }

@@ -7,75 +7,96 @@
 @inject ILogger<Login> logger
 @inject ISnackbar Snackbar
 @inject CustomAuthenticationStateProvider customAuthenticationStateProvider
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
 
 <PageTitle>FarmaVita - Iniciar Sesión</PageTitle>
 
-<div class="login-page-container">
-    <div class="login-form-container">
-        <div class="login-background">
-            <div class="content-wrapper">
-                <div class="welcome-side">
-                    <!-- CONTENIDO DE BIENVENIDA -->
-                </div>
-                <div class="login-side">
-                    <div class="login-form">
-                        <h2>Iniciar Sesión</h2>
-                        <p class="login-subtitle">Accede a tu cuenta del sistema</p>
+@if (!isUserAuthenticated)
+{
+    <div class="login-page-container">
+        <div class="login-form-container">
+            <div class="login-background">
+                <div class="content-wrapper">
+                    <div class="welcome-side">
+                        <!-- CONTENIDO DE BIENVENIDA -->
+                    </div>
+                    <div class="login-side">
+                        <div class="login-form">
+                            <h2>Iniciar Sesión</h2>
+                            <p class="login-subtitle">Accede a tu cuenta del sistema</p>
 
-                        @if (!string.IsNullOrEmpty(errorMessage))
-                        {
-                            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
-                        }
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+                            }
 
-                        <EditForm Model="@credencialesUsuario" OnValidSubmit="@HandleLogin">
-                            <DataAnnotationsValidator />
+                            <EditForm Model="@credencialesUsuario" OnValidSubmit="@HandleLogin">
+                                <DataAnnotationsValidator />
 
-                            <MudTextField Label="Correo Electrónico"
-                                          @bind-Value="credencialesUsuario.Email"
-                                          For="@(() => credencialesUsuario.Email)"
-                                          Required="true"
-                                          Variant="Variant.Outlined"
-                                          FullWidth="true"
-                                          Class="mb-3"
-                                          Adornment="Adornment.Start"
-                                          AdornmentIcon="@Icons.Material.Filled.Email" />
+                                <MudTextField Label="Correo Electrónico"
+                                              @bind-Value="credencialesUsuario.Email"
+                                              For="@(() => credencialesUsuario.Email)"
+                                              Required="true"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Class="mb-3"
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Email"
+                                              Disabled="@isLoading" />
 
-                            <MudTextField Label="Contraseña"
-                                          @bind-Value="credencialesUsuario.Password"
-                                          For="@(() => credencialesUsuario.Password)"
-                                          InputType="@passwordInput"
-                                          Required="true"
-                                          Variant="Variant.Outlined"
-                                          FullWidth="true"
-                                          Adornment="Adornment.End"
-                                          AdornmentIcon="@(passwordVisible? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                          OnAdornmentClick="PasswordVisibility" />
+                                <MudTextField Label="Contraseña"
+                                              @bind-Value="credencialesUsuario.Password"
+                                              For="@(() => credencialesUsuario.Password)"
+                                              InputType="@passwordInput"
+                                              Required="true"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@(passwordVisible? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                              OnAdornmentClick="PasswordVisibility"
+                                              Disabled="@isLoading" />
 
-                            <MudButton ButtonType="ButtonType.Submit"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       FullWidth="true"
-                                       Size="Size.Large"
-                                       Class="iniciar-sesion-button"
-                                       Disabled="@isLoading">
-                                @if (isLoading)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                                    <span class="ml-2">Iniciando sesión...</span>
-                                }
-                                else
-                                {
-                                    <i class="fas fa-sign-in-alt mr-2"></i>
-                                    <span>Iniciar Sesión</span>
-                                }
-                            </MudButton>
-                        </EditForm>
+                                <MudButton ButtonType="ButtonType.Submit"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           FullWidth="true"
+                                           Size="Size.Large"
+                                           Class="iniciar-sesion-button mt-4"
+                                           Disabled="@isLoading">
+                                    @if (isLoading)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                        <span class="ml-2">Iniciando sesión...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sign-in-alt mr-2"></i>
+                                        <span>Iniciar Sesión</span>
+                                    }
+                                </MudButton>
+                            </EditForm>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+}
+else
+{
+    <div class="loading-container">
+        <div class="loading-content">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
+            <MudImage Src="images/Logo FarmaVita.png"
+                      Width="120"
+                      Height="120"
+                      Alt="FarmaVita Logo"
+                      Class="mt-4 pulse-img" />
+            <p class="mt-3">Redirigiendo...</p>
+        </div>
+    </div>
+}
 
 @code {
     private CredencialesUsuario credencialesUsuario = new CredencialesUsuario();
@@ -83,26 +104,33 @@
     private bool passwordVisible = false;
     private InputType passwordInput = InputType.Password;
     private bool isLoading = false;
+    private bool isUserAuthenticated = false;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnInitializedAsync()
     {
-        if (firstRender)
+        try
         {
-            try
-            {
-                // Inicializar el AuthenticationStateProvider
-                await customAuthenticationStateProvider.InitializeAsync();
+            Console.WriteLine("🚀 Login - OnInitializedAsync iniciado");
 
-                var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
-                if (authState.User.Identity?.IsAuthenticated == true)
-                {
-                    NavigationManager.NavigateTo("/");
-                }
-            }
-            catch (Exception ex)
+            // Verificar si el usuario ya está autenticado
+            var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
+            isUserAuthenticated = authState?.User?.Identity?.IsAuthenticated ?? false;
+
+            Console.WriteLine($"🔍 Estado inicial de autenticación: {isUserAuthenticated}");
+
+            if (isUserAuthenticated)
             {
-                logger.LogError(ex, "Error inicializando authentication provider");
+                Console.WriteLine("✅ Usuario ya autenticado, redirigiendo inmediatamente...");
+                NavigationManager.NavigateTo("/", replace: true);
+                return;
             }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error inicializando login component");
+            Console.WriteLine($"❌ Error en OnInitializedAsync: {ex.Message}");
         }
     }
 
@@ -120,20 +148,41 @@
 
         try
         {
+            Console.WriteLine("🚀 Iniciando proceso de login...");
+
             var respuestaAutenticacion = await LoginService.Login(credencialesUsuario);
 
             if (!string.IsNullOrEmpty(respuestaAutenticacion.Token))
             {
-                // Guardar token y actualizar ClaimsPrincipal
+                Console.WriteLine("✅ Login exitoso, guardando token...");
+
+                // Guardar token
                 await customAuthenticationStateProvider.SetTokenAsync(respuestaAutenticacion.Token);
 
+                // Verificar autenticación inmediatamente
                 var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
-                var userName = authState.User.Identity?.Name ?? "Usuario";
+                var isAuthenticated = authState?.User?.Identity?.IsAuthenticated ?? false;
 
-                Snackbar.Add($"¡Bienvenido, {userName}!", Severity.Success);
+                Console.WriteLine($"🔍 Estado después del login: {isAuthenticated}");
 
-                // Redirigir al dashboard
-                NavigationManager.NavigateTo("/");
+                if (isAuthenticated)
+                {
+                    var userName = authState.User.FindFirst("nombre")?.Value ??
+                                   authState.User.Identity?.Name ??
+                                   "Usuario";
+
+                    Console.WriteLine($"👤 Usuario autenticado: {userName}");
+                    Snackbar.Add($"¡Bienvenido, {userName}!", Severity.Success);
+
+                    // Redirigir inmediatamente sin esperar
+                    NavigationManager.NavigateTo("/", replace: true);
+                }
+                else
+                {
+                    Console.WriteLine("❌ Error: Usuario no quedó autenticado después del login");
+                    errorMessage = "Error interno de autenticación";
+                    Snackbar.Add(errorMessage, Severity.Error);
+                }
             }
             else
             {
@@ -144,6 +193,7 @@
         catch (Exception ex)
         {
             logger.LogError(ex, "Error durante inicio de sesión");
+            Console.WriteLine($"❌ Error en HandleLogin: {ex.Message}");
             errorMessage = "Ocurrió un error inesperado. Intente nuevamente.";
             Snackbar.Add(errorMessage, Severity.Error);
         }
@@ -152,5 +202,10 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    public void Dispose()
+    {
+        // Simplificado - removemos las suscripciones que pueden causar loops
     }
 }
