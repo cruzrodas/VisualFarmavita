@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ProyectoFarmaVita.Models;
 using ProyectoFarmaVita.Services.PersonaServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ProyectoFarmaVita.Services.PersonaServices
 {
@@ -15,6 +17,52 @@ namespace ProyectoFarmaVita.Services.PersonaServices
         {
             _contextFactory = contextFactory;
         }
+
+        #region Métodos de Hash de Contraseña
+
+        /// <summary>
+        /// Hashea una contraseña usando SHA256
+        /// </summary>
+        private string HashPassword(string password)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(password))
+                    return string.Empty;
+
+                using var sha256 = SHA256.Create();
+                var bytes = Encoding.UTF8.GetBytes(password);
+                var hash = sha256.ComputeHash(bytes);
+                return Convert.ToBase64String(hash);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Verifica si una contraseña coincide con el hash
+        /// </summary>
+        private bool VerifyPassword(string plainTextPassword, string hashedPassword)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(plainTextPassword) || string.IsNullOrEmpty(hashedPassword))
+                    return false;
+
+                var hashOfInput = HashPassword(plainTextPassword);
+                return string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
+                return false;
+            }
+        }
+
+        #endregion
 
         #region Métodos Principales CRUD
 
@@ -170,6 +218,19 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                     }
                 }
 
+                // 🔒 HASHEAR LA CONTRASEÑA ANTES DE GUARDAR
+                if (!string.IsNullOrEmpty(persona.Contraseña))
+                {
+                    Console.WriteLine($"🔒 Hasheando contraseña para nuevo usuario: {persona.Email}");
+                    persona.Contraseña = HashPassword(persona.Contraseña);
+                    Console.WriteLine($"✅ Contraseña hasheada correctamente");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ No se proporcionó contraseña para el nuevo usuario");
+                    return false;
+                }
+
                 // Configurar campos automáticos
                 persona.FechaCreacion = DateTime.Now;
                 persona.FechaRegistro = DateTime.Now.ToString("yyyy-MM-dd");
@@ -262,10 +323,19 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                 persona.FechaModificacion = DateTime.Now;
                 persona.UsuarioModificacion = "Sistema";
 
-                // No actualizar contraseña en edición regular si está vacía
+                // 🔒 MANEJAR LA CONTRASEÑA EN ACTUALIZACIONES
                 if (string.IsNullOrEmpty(persona.Contraseña))
                 {
+                    // Si no se proporciona contraseña, mantener la existente
+                    Console.WriteLine($"🔒 Manteniendo contraseña existente para usuario: {persona.Email}");
                     persona.Contraseña = existingPersona.Contraseña;
+                }
+                else
+                {
+                    // Si se proporciona una nueva contraseña, hashearla
+                    Console.WriteLine($"🔒 Actualizando contraseña para usuario: {persona.Email}");
+                    persona.Contraseña = HashPassword(persona.Contraseña);
+                    Console.WriteLine($"✅ Nueva contraseña hasheada correctamente");
                 }
 
                 // Usar Update en lugar de Entry para mejor tracking
@@ -660,14 +730,14 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                     return false;
                 }
 
-                // TODO: En producción, implementar hash de contraseña
-                // persona.Contraseña = BCrypt.Net.BCrypt.HashPassword(newPassword);
-                persona.Contraseña = newPassword;
+                // 🔒 HASHEAR LA NUEVA CONTRASEÑA
+                Console.WriteLine($"🔒 Cambiando contraseña para usuario ID: {idPersona}");
+                persona.Contraseña = HashPassword(newPassword);
                 persona.FechaModificacion = DateTime.Now;
                 persona.UsuarioModificacion = "Sistema";
 
                 var result = await context.SaveChangesAsync();
-                Console.WriteLine($"ChangePasswordAsync - Contraseña cambiada: {result > 0}, ID: {idPersona}");
+                Console.WriteLine($"✅ ChangePasswordAsync - Contraseña cambiada: {result > 0}, ID: {idPersona}");
                 return result > 0;
             }
             catch (Exception ex)
@@ -976,6 +1046,7 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                 _semaphore.Release();
             }
         }
+
         public async Task<int?> UpdateTelefonoAsync(int idTelefono, int numeroTelefonico)
         {
             await _semaphore.WaitAsync();
@@ -1199,8 +1270,6 @@ namespace ProyectoFarmaVita.Services.PersonaServices
             }
         }
 
-
-
         #endregion
 
         #region IDisposable
@@ -1212,8 +1281,4 @@ namespace ProyectoFarmaVita.Services.PersonaServices
 
         #endregion
     }
-
-
-
 }
-            

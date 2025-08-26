@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using ProyectoFarmaVita.Models;
 
@@ -19,6 +18,52 @@ namespace ProyectoFarmaVita.Services.LoginServices
             llavejwt = iConfiguration["llavejwt"];
             _dbContextFactory = dbContextFactory;
         }
+
+        #region Métodos de Hash (iguales que en PersonaService)
+
+        /// <summary>
+        /// Hashea una contraseña usando SHA256 (mismo método que PersonaService)
+        /// </summary>
+        private string HashPassword(string password)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(password))
+                    return string.Empty;
+
+                using var sha256 = SHA256.Create();
+                var bytes = Encoding.UTF8.GetBytes(password);
+                var hash = sha256.ComputeHash(bytes);
+                return Convert.ToBase64String(hash);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Verifica si una contraseña coincide con el hash
+        /// </summary>
+        private bool VerifyPassword(string plainTextPassword, string hashedPassword)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(plainTextPassword) || string.IsNullOrEmpty(hashedPassword))
+                    return false;
+
+                var hashOfInput = HashPassword(plainTextPassword);
+                return string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
+                return false;
+            }
+        }
+
+        #endregion
 
         public async Task<RespuestaAutenticacion> Login(CredencialesUsuario credencialesUsuario)
         {
@@ -64,7 +109,6 @@ namespace ProyectoFarmaVita.Services.LoginServices
                 Console.WriteLine($"   - Nombre: {persona.Nombre} {persona.Apellido}");
                 Console.WriteLine($"   - Email: {persona.Email}");
                 Console.WriteLine($"   - Activo: {persona.Activo}");
-                Console.WriteLine($"   - Contraseña almacenada: '{persona.Contraseña}'");
                 Console.WriteLine($"   - Rol: {persona.IdRoolNavigation?.TipoRol ?? "Sin rol"}");
 
                 // 3. Verificar si está activo
@@ -78,20 +122,13 @@ namespace ProyectoFarmaVita.Services.LoginServices
                 // 4. Verificar contraseña
                 Console.WriteLine("🔍 Verificando contraseña...");
 
-                // Generar hash de la contraseña ingresada
-                string hashedInputPassword = HashPassword(credencialesUsuario.Password);
-                Console.WriteLine($"🔑 Contraseña ingresada hasheada: '{hashedInputPassword}'");
+                // Usar el método VerifyPassword que usa el mismo hash que PersonaService
+                bool passwordMatch = VerifyPassword(credencialesUsuario.Password, persona.Contraseña);
+                Console.WriteLine($"🔍 Contraseña correcta: {passwordMatch}");
 
-                // Comparaciones
-                bool hashMatch = persona.Contraseña == hashedInputPassword;
-                bool plainTextMatch = persona.Contraseña == credencialesUsuario.Password;
-
-                Console.WriteLine($"🔍 Coincide con hash: {hashMatch}");
-                Console.WriteLine($"🔍 Coincide texto plano: {plainTextMatch}");
-
-                if (hashMatch || plainTextMatch)
+                if (passwordMatch)
                 {
-                    Console.WriteLine("✅ Contraseña correcta");
+                    Console.WriteLine("✅ Contraseña correcta - Generando token");
 
                     // 5. Construir token
                     Console.WriteLine("🎟️ Construyendo token...");
@@ -127,40 +164,6 @@ namespace ProyectoFarmaVita.Services.LoginServices
             finally
             {
                 Console.WriteLine("🏁 ===== FIN LOGIN DEBUG =====");
-            }
-        }
-
-        private string HashPassword(string password)
-        {
-            try
-            {
-                using var sha256 = SHA256.Create();
-                var bytes = Encoding.UTF8.GetBytes(password);
-                var hash = sha256.ComputeHash(bytes);
-                return Convert.ToBase64String(hash);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
-                return string.Empty;
-            }
-        }
-
-        private bool VerifyPassword(string plainTextPassword, string hashedPassword)
-        {
-            try
-            {
-                using var sha256 = SHA256.Create();
-                var bytes = Encoding.UTF8.GetBytes(plainTextPassword);
-                var hash = sha256.ComputeHash(bytes);
-                var enteredPasswordHash = Convert.ToBase64String(hash);
-
-                return hashedPassword == enteredPasswordHash;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
-                return false;
             }
         }
 
