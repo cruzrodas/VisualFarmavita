@@ -1,0 +1,381 @@
+﻿@page "/personas/reestablecer/{IdPersona:int}"
+@using ProyectoFarmaVita.Components.Authorization
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.PersonaServices
+@inject IPersonaService PersonaService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Reestablecer Contraseña - FarmaVita</PageTitle>
+
+<RoleRequired RequiredRole="Administrador,Gerente">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="pa-4">
+        <MudPaper Elevation="3" Class="pa-6">
+            <MudGrid>
+                <!-- Header -->
+                <MudItem xs="12" Class="mb-4">
+                    <div class="d-flex align-center mb-4">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                       Color="Color.Primary"
+                                       OnClick="@(() => NavigationManager.NavigateTo("/personas"))"
+                                       Class="mr-3" />
+                        <MudText Typo="Typo.h5" Class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" Class="mr-3" Size="Size.Large" />
+                            Reestablecer Contraseña
+                        </MudText>
+                    </div>
+                </MudItem>
+
+                <!-- Información del Usuario -->
+                @if (persona != null)
+                {
+                    <MudItem xs="12" Class="mb-4">
+                        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info">
+                            <MudText Typo="Typo.subtitle1" Class="font-weight-medium">
+                                Usuario: <strong>@($"{persona.Nombre} {persona.Apellido}")</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Email: @persona.Email
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Rol: @(persona.IdRoolNavigation?.TipoRol ?? "Sin rol")
+                            </MudText>
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <!-- Loading Overlay -->
+                @if (loading)
+                {
+                    <MudItem xs="12">
+                        <div class="loading-overlay">
+                            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                            <MudText Class="mt-3" Typo="Typo.h6" Color="Color.Primary">
+                                @(persona == null ? "Cargando información del usuario..." : "Actualizando contraseña...")
+                            </MudText>
+                        </div>
+                    </MudItem>
+                }
+
+                <!-- Formulario -->
+                <MudItem xs="12">
+                    <EditForm Model="@modelo" OnValidSubmit="@ReestablecerContrasena">
+                        <DataAnnotationsValidator />
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="modelo.NuevaContrasena"
+                                              Label="Nueva Contraseña *"
+                                              Required="true"
+                                              RequiredError="La contraseña es requerida"
+                                              InputType="@passwordInput"
+                                              MinLength="6"
+                                              MaxLength="50"
+                                              Counter="50"
+                                              Immediate="true"
+                                              Validation="@(new Func<string, IEnumerable<string>>(ValidarContraseña))"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@passwordInputIcon"
+                                              OnAdornmentClick="TogglePasswordVisibility"
+                                              AdornmentAriaLabel="Mostrar contraseña"
+                                              Disabled="@loading"
+                                              HelperText="Mínimo 6 caracteres, incluir mayúsculas, minúsculas y números" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="modelo.ConfirmarContrasena"
+                                              Label="Confirmar Contraseña *"
+                                              Required="true"
+                                              RequiredError="Confirme la contraseña"
+                                              InputType="@passwordInput"
+                                              Immediate="true"
+                                              Validation="@(new Func<string, IEnumerable<string>>(ValidarConfirmarContraseña))"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@passwordInputIcon"
+                                              OnAdornmentClick="TogglePasswordVisibility"
+                                              AdornmentAriaLabel="Mostrar contraseña"
+                                              Disabled="@loading" />
+                            </MudItem>
+
+                            <!-- Validation Summary -->
+                            <MudItem xs="12">
+                                <ValidationSummary class="validation-summary" />
+                            </MudItem>
+
+                            <!-- Botones de Acción -->
+                            <MudItem xs="12" Class="d-flex justify-end gap-3 mt-4">
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.Cancel"
+                                           OnClick="@CancelarOperacion"
+                                           Disabled="@loading"
+                                           Class="cancel-button">
+                                    Cancelar
+                                </MudButton>
+                                <MudButton ButtonType="ButtonType.Submit"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.VpnKey"
+                                           Disabled="@loading"
+                                           Class="save-button">
+                                    @if (loading)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                        <span class="ml-2">Actualizando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Reestablecer Contraseña</span>
+                                    }
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </EditForm>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    </MudContainer>
+</RoleRequired>
+
+<style>
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .save-button {
+        background-color: #03346c !important;
+        color: white !important;
+        min-width: 200px;
+        transition: all 0.3s ease;
+    }
+
+        .save-button:hover {
+            background-color: #024590 !important;
+            transform: translateY(-1px);
+        }
+
+    .cancel-button {
+        min-width: 120px;
+    }
+
+    .validation-summary {
+        background-color: #fee;
+        border: 1px solid #fcc;
+        border-radius: 4px;
+        padding: 16px;
+        margin: 16px 0;
+        color: #c33;
+    }
+
+        .validation-summary ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .validation-summary li {
+            margin: 4px 0;
+        }
+
+    @@media (max-width: 768px) {
+        .save-button, .cancel-button {
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .d-flex.justify-end.gap-3 {
+            flex-direction: column-reverse;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int IdPersona { get; set; }
+
+    private Persona? persona;
+    private ModeloContrasena modelo = new();
+    private bool loading = false;
+    private bool mostrarContrasena = false;
+    private InputType passwordInput = InputType.Password;
+    private string passwordInputIcon = Icons.Material.Filled.VisibilityOff;
+
+    public class ModeloContrasena
+    {
+        public string NuevaContrasena { get; set; } = "";
+        public string ConfirmarContrasena { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            loading = true;
+            StateHasChanged();
+
+            await CargarPersona();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnInitializedAsync: {ex.Message}");
+            Snackbar.Add("Error al cargar la información del usuario", Severity.Error);
+            NavigationManager.NavigateTo("/personas");
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarPersona()
+    {
+        try
+        {
+            persona = await PersonaService.GetByIdAsync(IdPersona);
+            if (persona == null)
+            {
+                Snackbar.Add("Persona no encontrada", Severity.Error);
+                NavigationManager.NavigateTo("/personas");
+                return;
+            }
+
+            if (persona.Activo != true)
+            {
+                Snackbar.Add("No se puede reestablecer la contraseña de una persona inactiva", Severity.Warning);
+                NavigationManager.NavigateTo("/personas");
+                return;
+            }
+
+            Console.WriteLine($"Persona cargada: {persona.Nombre} {persona.Apellido} - Email: {persona.Email}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar persona: {ex.Message}");
+            throw;
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        mostrarContrasena = !mostrarContrasena;
+        passwordInput = mostrarContrasena ? InputType.Text : InputType.Password;
+        passwordInputIcon = mostrarContrasena ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff;
+    }
+
+    private async Task ReestablecerContrasena()
+    {
+        try
+        {
+            if (persona == null) return;
+
+            loading = true;
+            StateHasChanged();
+
+            Console.WriteLine($"🔒 Reestableciendo contraseña para persona ID: {IdPersona}");
+            Console.WriteLine($"🔒 Nueva contraseña: '{modelo.NuevaContrasena}'");
+
+            bool resultado = await PersonaService.ChangePasswordAsync(IdPersona, modelo.NuevaContrasena);
+
+            if (resultado)
+            {
+                Snackbar.Add($"Contraseña actualizada exitosamente para {persona.Nombre} {persona.Apellido}", Severity.Success);
+                
+                // Limpiar el formulario
+                modelo = new ModeloContrasena();
+                
+                // Redirigir después de un breve delay
+                await Task.Delay(1000);
+                NavigationManager.NavigateTo("/personas");
+            }
+            else
+            {
+                Snackbar.Add("Error al actualizar la contraseña", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en ReestablecerContrasena: {ex.Message}");
+            Snackbar.Add($"Error al reestablecer la contraseña: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CancelarOperacion()
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Confirmar cancelación",
+            "¿Está seguro que desea cancelar? Los cambios no se guardarán.",
+            yesText: "Sí, cancelar",
+            noText: "Continuar",
+            options: new DialogOptions() { MaxWidth = MaxWidth.Small });
+
+        if (result ?? false)
+        {
+            NavigationManager.NavigateTo("/personas");
+        }
+    }
+
+    #region Validaciones
+
+    private IEnumerable<string> ValidarContraseña(string contraseña)
+    {
+        if (string.IsNullOrWhiteSpace(contraseña))
+        {
+            yield return "La contraseña es requerida";
+        }
+        else if (contraseña.Length < 6)
+        {
+            yield return "La contraseña debe tener al menos 6 caracteres";
+        }
+        else if (contraseña.Length > 50)
+        {
+            yield return "La contraseña no puede exceder 50 caracteres";
+        }
+        else
+        {
+            bool tieneMayuscula = System.Text.RegularExpressions.Regex.IsMatch(contraseña, @"[A-Z]");
+            bool tieneMinuscula = System.Text.RegularExpressions.Regex.IsMatch(contraseña, @"[a-z]");
+            bool tieneNumero = System.Text.RegularExpressions.Regex.IsMatch(contraseña, @"\d");
+
+            if (!tieneMayuscula)
+            {
+                yield return "La contraseña debe contener al menos una letra mayúscula";
+            }
+            if (!tieneMinuscula)
+            {
+                yield return "La contraseña debe contener al menos una letra minúscula";
+            }
+            if (!tieneNumero)
+            {
+                yield return "La contraseña debe contener al menos un número";
+            }
+        }
+    }
+
+    private IEnumerable<string> ValidarConfirmarContraseña(string confirmar)
+    {
+        if (string.IsNullOrWhiteSpace(confirmar))
+        {
+            yield return "Confirme la contraseña";
+        }
+        else if (confirmar != modelo.NuevaContrasena)
+        {
+            yield return "Las contraseñas no coinciden";
+        }
+    }
+
+    #endregion
+}

@@ -18,46 +18,67 @@ namespace ProyectoFarmaVita.Services.PersonaServices
             _contextFactory = contextFactory;
         }
 
-        #region Métodos de Hash de Contraseña
+        #region Métodos de Hash de Contraseña - CONSISTENTES CON LOGIN SERVICE
 
         /// <summary>
-        /// Hashea una contraseña usando SHA256
+        /// Hashea una contraseña usando SHA256 (MISMO MÉTODO QUE LoginService)
         /// </summary>
         private string HashPassword(string password)
         {
             try
             {
+                Console.WriteLine($"🔧 PersonaService - Hasheando contraseña");
+
                 if (string.IsNullOrEmpty(password))
+                {
+                    Console.WriteLine("❌ PersonaService - Password vacío o null");
                     return string.Empty;
+                }
 
                 using var sha256 = SHA256.Create();
                 var bytes = Encoding.UTF8.GetBytes(password);
                 var hash = sha256.ComputeHash(bytes);
-                return Convert.ToBase64String(hash);
+                var result = Convert.ToBase64String(hash);
+
+                Console.WriteLine($"✅ PersonaService - Contraseña hasheada correctamente");
+                Console.WriteLine($"🔍 PersonaService - Hash generado: '{result}'");
+                Console.WriteLine($"🔍 PersonaService - Hash length: {result.Length}");
+
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
+                Console.WriteLine($"❌ PersonaService - Error al hashear contraseña: {ex.Message}");
                 return string.Empty;
             }
         }
 
         /// <summary>
-        /// Verifica si una contraseña coincide con el hash
+        /// Verifica si una contraseña coincide con el hash (MISMO MÉTODO QUE LoginService)
         /// </summary>
         private bool VerifyPassword(string plainTextPassword, string hashedPassword)
         {
             try
             {
+                Console.WriteLine($"🔍 PersonaService - Verificando contraseña");
+                Console.WriteLine($"🔍 PersonaService - Password texto plano: '{plainTextPassword}'");
+                Console.WriteLine($"🔍 PersonaService - Hash almacenado: '{hashedPassword}'");
+
                 if (string.IsNullOrEmpty(plainTextPassword) || string.IsNullOrEmpty(hashedPassword))
+                {
+                    Console.WriteLine($"❌ PersonaService - Valores vacíos detectados");
                     return false;
+                }
 
                 var hashOfInput = HashPassword(plainTextPassword);
-                return string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+                var isMatch = string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+
+                Console.WriteLine($"🔍 PersonaService - Contraseñas coinciden: {isMatch}");
+                return isMatch;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
+                Console.WriteLine($"❌ PersonaService - Error al verificar contraseña: {ex.Message}");
                 return false;
             }
         }
@@ -218,16 +239,20 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                     }
                 }
 
-                // 🔒 HASHEAR LA CONTRASEÑA ANTES DE GUARDAR
+                // 🔒 HASHEAR LA CONTRASEÑA ANTES DE GUARDAR - CONSISTENTE CON LOGIN SERVICE
                 if (!string.IsNullOrEmpty(persona.Contraseña))
                 {
-                    Console.WriteLine($"🔒 Hasheando contraseña para nuevo usuario: {persona.Email}");
+                    Console.WriteLine($"🔒 PersonaService - Hasheando contraseña para nuevo usuario: {persona.Email}");
+                    var originalPassword = persona.Contraseña; // Guardar para debug
                     persona.Contraseña = HashPassword(persona.Contraseña);
-                    Console.WriteLine($"✅ Contraseña hasheada correctamente");
+
+                    Console.WriteLine($"✅ PersonaService - Contraseña hasheada correctamente");
+                    Console.WriteLine($"🔍 PersonaService - Password original: '{originalPassword}'");
+                    Console.WriteLine($"🔍 PersonaService - Hash final: '{persona.Contraseña}'");
                 }
                 else
                 {
-                    Console.WriteLine("⚠️ No se proporcionó contraseña para el nuevo usuario");
+                    Console.WriteLine("⚠️ PersonaService - No se proporcionó contraseña para el nuevo usuario");
                     return false;
                 }
 
@@ -323,19 +348,23 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                 persona.FechaModificacion = DateTime.Now;
                 persona.UsuarioModificacion = "Sistema";
 
-                // 🔒 MANEJAR LA CONTRASEÑA EN ACTUALIZACIONES
+                // 🔒 MANEJAR LA CONTRASEÑA EN ACTUALIZACIONES - CONSISTENTE CON LOGIN SERVICE
                 if (string.IsNullOrEmpty(persona.Contraseña))
                 {
                     // Si no se proporciona contraseña, mantener la existente
-                    Console.WriteLine($"🔒 Manteniendo contraseña existente para usuario: {persona.Email}");
+                    Console.WriteLine($"🔒 PersonaService - Manteniendo contraseña existente para usuario: {persona.Email}");
                     persona.Contraseña = existingPersona.Contraseña;
                 }
                 else
                 {
                     // Si se proporciona una nueva contraseña, hashearla
-                    Console.WriteLine($"🔒 Actualizando contraseña para usuario: {persona.Email}");
+                    Console.WriteLine($"🔒 PersonaService - Actualizando contraseña para usuario: {persona.Email}");
+                    var originalPassword = persona.Contraseña;
                     persona.Contraseña = HashPassword(persona.Contraseña);
-                    Console.WriteLine($"✅ Nueva contraseña hasheada correctamente");
+
+                    Console.WriteLine($"✅ PersonaService - Nueva contraseña hasheada correctamente");
+                    Console.WriteLine($"🔍 PersonaService - Password original: '{originalPassword}'");
+                    Console.WriteLine($"🔍 PersonaService - Hash final: '{persona.Contraseña}'");
                 }
 
                 // Usar Update en lugar de Entry para mejor tracking
@@ -730,8 +759,10 @@ namespace ProyectoFarmaVita.Services.PersonaServices
                     return false;
                 }
 
-                // 🔒 HASHEAR LA NUEVA CONTRASEÑA
-                Console.WriteLine($"🔒 Cambiando contraseña para usuario ID: {idPersona}");
+                // 🔒 HASHEAR LA NUEVA CONTRASEÑA - CONSISTENTE CON LOGIN SERVICE
+                Console.WriteLine($"🔒 PersonaService - Cambiando contraseña para usuario ID: {idPersona}");
+                Console.WriteLine($"🔍 PersonaService - Nueva contraseña: '{newPassword}'");
+
                 persona.Contraseña = HashPassword(newPassword);
                 persona.FechaModificacion = DateTime.Now;
                 persona.UsuarioModificacion = "Sistema";

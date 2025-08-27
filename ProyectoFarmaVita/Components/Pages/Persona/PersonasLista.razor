@@ -309,6 +309,12 @@
 								</MudMenuItem>
 								@if (row.Activo == true)
 								{
+									<MudMenuItem Icon="@Icons.Material.Filled.Lock"
+												 OnClick="@(() => ReestablecerContrasena(row))"
+												 Class="menu-item-password">
+										Cambiar Contraseña
+									</MudMenuItem>
+									<MudDivider Class="my-1" />
 									<MudMenuItem Icon="@Icons.Material.Filled.PersonOff"
 												 OnClick="@(() => DesactivarPersona(row))"
 												 Class="menu-item-deactivate">
@@ -456,6 +462,15 @@
 
 	.menu-item-edit:hover {
 		background-color: rgba(255, 152, 0, 0.1);
+	}
+
+	.menu-item-password:hover {
+		background-color: rgba(156, 39, 176, 0.1);
+		color: #9c27b0 !important;
+	}
+
+	.menu-item-password .mud-icon {
+		color: #9c27b0;
 	}
 
 	.menu-item-activate:hover {
@@ -632,6 +647,43 @@
 		if (!_disposed)
 		{
 			NavigationManager.NavigateTo($"/personas/editar/{persona.IdPersona}");
+		}
+	}
+
+	// NUEVO MÉTODO: Reestablecer Contraseña
+	private async Task ReestablecerContrasena(Persona persona)
+	{
+		if (_disposed) return;
+
+		// Verificar que la persona esté activa
+		if (persona.Activo != true)
+		{
+			await MostrarError("No se puede cambiar la contraseña de una persona inactiva");
+			return;
+		}
+
+		bool? result = await DialogService.ShowMessageBox(
+			"Confirmar cambio de contraseña",
+			$"¿Está seguro que desea reestablecer la contraseña de {persona.Nombre} {persona.Apellido}?\n\nEsto permitirá al usuario establecer una nueva contraseña.",
+			yesText: "Confirmar",
+			noText: "Cancelar",
+			options: new DialogOptions() { MaxWidth = MaxWidth.Small });
+
+		if (result == true && !_disposed)
+		{
+			try
+			{
+				// Navegar a la página de reestablecer contraseña
+				NavigationManager.NavigateTo($"/personas/reestablecer/{persona.IdPersona}");
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error en ReestablecerContrasena: {ex.Message}");
+				if (!_disposed)
+				{
+					await MostrarError($"Error al procesar la solicitud: {ex.Message}");
+				}
+			}
 		}
 	}
 
