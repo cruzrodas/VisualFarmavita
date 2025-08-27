@@ -1,0 +1,77 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using ProyectoFarmaVita.Services.AuthorizationServices
+@inject IRoleAuthorizationService RoleAuth
+@inject NavigationManager Navigation
+
+@if (isAuthorized)
+{
+    @ChildContent
+}
+else if (isLoading)
+{
+    <div class="d-flex justify-center align-center" style="height: 200px;">
+        <MudProgressCircular Indeterminate="true" />
+        <MudText Class="ml-3">Verificando permisos...</MudText>
+    </div>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+        <MudPaper Class="pa-6" Elevation="3">
+            <div class="text-center">
+                <MudIcon Icon="@Icons.Material.Filled.Block"
+                         Style="font-size: 4rem; color: #f44336;" />
+
+                <MudText Typo="Typo.h4" Class="mt-4 mb-2" Color="Color.Error">
+                    Acceso Denegado
+                </MudText>
+
+                <MudText Typo="Typo.body1" Class="mb-4">
+                    No tienes permisos para acceder a esta sección.
+                </MudText>
+
+                <MudText Typo="Typo.body2" Class="mb-4 text-muted">
+                    Rol requerido: <strong>@RequiredRole</strong>
+                </MudText>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="GoHome"
+                           StartIcon="@Icons.Material.Filled.Home">
+                    Volver al Inicio
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public string RequiredRole { get; set; } = "";
+    [Parameter] public RenderFragment ChildContent { get; set; }
+
+    private bool isAuthorized = false;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isAuthorized = await RoleAuth.CanAccessPageAsync(RequiredRole);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error verificando rol: {ex.Message}");
+            isAuthorized = false;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

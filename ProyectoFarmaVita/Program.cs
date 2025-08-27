@@ -4,6 +4,7 @@ using MudBlazor.Services;
 using ProyectoFarmaVita.Components;
 using ProyectoFarmaVita.Models;
 using ProyectoFarmaVita.Services.AsignacionTurnoServices;
+using ProyectoFarmaVita.Services.AuthorizationServices;
 using ProyectoFarmaVita.Services.CategoriaProductoService;
 using ProyectoFarmaVita.Services.CategoriaServices;
 using ProyectoFarmaVita.Services.DepartamentoServices;
@@ -59,6 +60,7 @@ builder.Services.AddScoped<IProveedorService, SProveedorService>();
 builder.Services.AddScoped<IProductoService, SProductoService>();
 builder.Services.AddScoped<IInventarioService, SInventarioService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddScoped<IRoleAuthorizationService, RoleAuthorizationService>();
 
 // MudBlazor
 builder.Services.AddMudServices();

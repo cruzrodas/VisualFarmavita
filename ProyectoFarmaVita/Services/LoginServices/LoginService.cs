@@ -28,17 +28,36 @@ namespace ProyectoFarmaVita.Services.LoginServices
         {
             try
             {
+                Console.WriteLine($"🔧 === DEBUG HASH PASSWORD ===");
+                Console.WriteLine($"🔧 Hasheando password: '{password}'");
+
                 if (string.IsNullOrEmpty(password))
+                {
+                    Console.WriteLine($"❌ Password vacío o null");
                     return string.Empty;
+                }
 
                 using var sha256 = SHA256.Create();
                 var bytes = Encoding.UTF8.GetBytes(password);
+                Console.WriteLine($"🔧 Password length: {password.Length}");
+                Console.WriteLine($"🔧 Bytes originales count: {bytes.Length}");
+                Console.WriteLine($"🔧 Primeros 10 bytes: [{string.Join(", ", bytes.Take(10))}]");
+
                 var hash = sha256.ComputeHash(bytes);
-                return Convert.ToBase64String(hash);
+                Console.WriteLine($"🔧 Hash bytes count: {hash.Length}");
+                Console.WriteLine($"🔧 Primeros 10 hash bytes: [{string.Join(", ", hash.Take(10))}]");
+
+                var result = Convert.ToBase64String(hash);
+                Console.WriteLine($"🔧 Resultado Base64: '{result}'");
+                Console.WriteLine($"🔧 Resultado Base64 length: {result.Length}");
+                Console.WriteLine($"🔧 === FIN DEBUG HASH PASSWORD ===");
+
+                return result;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Error al hashear contraseña: {ex.Message}");
+                Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
                 return string.Empty;
             }
         }
@@ -50,15 +69,70 @@ namespace ProyectoFarmaVita.Services.LoginServices
         {
             try
             {
+                Console.WriteLine($"🔍 === DEBUG VERIFICACIÓN CONTRASEÑA ===");
+                Console.WriteLine($"🔍 Password texto plano: '{plainTextPassword}'");
+                Console.WriteLine($"🔍 Password texto plano length: {plainTextPassword?.Length ?? 0}");
+                Console.WriteLine($"🔍 Hash desde BD: '{hashedPassword}'");
+                Console.WriteLine($"🔍 Hash desde BD length: {hashedPassword?.Length ?? 0}");
+
                 if (string.IsNullOrEmpty(plainTextPassword) || string.IsNullOrEmpty(hashedPassword))
+                {
+                    Console.WriteLine($"❌ Valores vacíos - Plain: {string.IsNullOrEmpty(plainTextPassword)}, Hash: {string.IsNullOrEmpty(hashedPassword)}");
+                    Console.WriteLine($"🔍 === FIN DEBUG VERIFICACIÓN (VALORES VACÍOS) ===");
                     return false;
+                }
+
+                // Verificar si hay caracteres extraños o espacios
+                Console.WriteLine($"🔍 Hash BD empieza con: '{hashedPassword.Substring(0, Math.Min(10, hashedPassword.Length))}'");
+                Console.WriteLine($"🔍 Hash BD termina con: '{hashedPassword.Substring(Math.Max(0, hashedPassword.Length - 10))}'");
+                Console.WriteLine($"🔍 ¿Hash BD tiene espacios al inicio? {hashedPassword.StartsWith(" ")}");
+                Console.WriteLine($"🔍 ¿Hash BD tiene espacios al final? {hashedPassword.EndsWith(" ")}");
 
                 var hashOfInput = HashPassword(plainTextPassword);
-                return string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+                Console.WriteLine($"🔍 Hash calculado: '{hashOfInput}'");
+                Console.WriteLine($"🔍 Hash calculado length: {hashOfInput?.Length ?? 0}");
+
+                if (!string.IsNullOrEmpty(hashOfInput) && !string.IsNullOrEmpty(hashedPassword))
+                {
+                    Console.WriteLine($"🔍 Hash calculado empieza con: '{hashOfInput.Substring(0, Math.Min(10, hashOfInput.Length))}'");
+                    Console.WriteLine($"🔍 Hash calculado termina con: '{hashOfInput.Substring(Math.Max(0, hashOfInput.Length - 10))}'");
+                }
+
+                // Comparación exacta
+                bool sonIguales = string.Equals(hashOfInput, hashedPassword, StringComparison.Ordinal);
+                Console.WriteLine($"🔍 ¿Son exactamente iguales? {sonIguales}");
+
+                // Comparación con trim (por si hay espacios)
+                bool sonIgualesTrim = string.Equals(hashOfInput?.Trim(), hashedPassword?.Trim(), StringComparison.Ordinal);
+                Console.WriteLine($"🔍 ¿Son iguales con Trim? {sonIgualesTrim}");
+
+                // Comparación ignorando case (por si acaso)
+                bool sonIgualesIgnoreCase = string.Equals(hashOfInput, hashedPassword, StringComparison.OrdinalIgnoreCase);
+                Console.WriteLine($"🔍 ¿Son iguales ignorando case? {sonIgualesIgnoreCase}");
+
+                // Verificar caracteres específicos
+                if (!sonIguales && !string.IsNullOrEmpty(hashOfInput) && !string.IsNullOrEmpty(hashedPassword))
+                {
+                    Console.WriteLine($"🔍 === ANÁLISIS DETALLADO DE DIFERENCIAS ===");
+                    int minLength = Math.Min(hashOfInput.Length, hashedPassword.Length);
+                    for (int i = 0; i < minLength && i < 20; i++) // Solo primeros 20 caracteres
+                    {
+                        if (hashOfInput[i] != hashedPassword[i])
+                        {
+                            Console.WriteLine($"🔍 Diferencia en posición {i}: calculado='{hashOfInput[i]}' ({(int)hashOfInput[i]}), BD='{hashedPassword[i]}' ({(int)hashedPassword[i]})");
+                        }
+                    }
+                    Console.WriteLine($"🔍 === FIN ANÁLISIS DETALLADO ===");
+                }
+
+                Console.WriteLine($"🔍 === FIN DEBUG VERIFICACIÓN (RESULTADO: {sonIguales}) ===");
+
+                return sonIguales;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Error al verificar contraseña: {ex.Message}");
+                Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
                 return false;
             }
         }
@@ -70,6 +144,7 @@ namespace ProyectoFarmaVita.Services.LoginServices
             Console.WriteLine("🚀 ===== INICIO LOGIN DEBUG =====");
             Console.WriteLine($"📧 Email recibido: '{credencialesUsuario.Email}'");
             Console.WriteLine($"🔑 Password recibido: '{credencialesUsuario.Password}'");
+            Console.WriteLine($"🔑 Password recibido length: {credencialesUsuario.Password?.Length ?? 0}");
 
             using var dbContext = await _dbContextFactory.CreateDbContextAsync();
 
@@ -90,7 +165,7 @@ namespace ProyectoFarmaVita.Services.LoginServices
                 }
 
                 // 2. Buscar usuario por email
-                Console.WriteLine($"🔍 Buscando usuario con email: {credencialesUsuario.Email}");
+                Console.WriteLine($"🔍 Buscando usuario con email: '{credencialesUsuario.Email}'");
 
                 var persona = await dbContext.Persona
                     .Include(p => p.IdRoolNavigation)
@@ -110,6 +185,8 @@ namespace ProyectoFarmaVita.Services.LoginServices
                 Console.WriteLine($"   - Email: {persona.Email}");
                 Console.WriteLine($"   - Activo: {persona.Activo}");
                 Console.WriteLine($"   - Rol: {persona.IdRoolNavigation?.TipoRol ?? "Sin rol"}");
+                Console.WriteLine($"   - Contraseña Hash: '{persona.Contraseña}'");
+                Console.WriteLine($"   - Contraseña Hash Length: {persona.Contraseña?.Length ?? 0}");
 
                 // 3. Verificar si está activo
                 if (persona.Activo != true)
@@ -137,7 +214,7 @@ namespace ProyectoFarmaVita.Services.LoginServices
                     if (!string.IsNullOrEmpty(respuestaAutenticacion.Token))
                     {
                         Console.WriteLine("✅ Token generado exitosamente");
-                        Console.WriteLine($"🎟️ Token: {respuestaAutenticacion.Token.Substring(0, 50)}...");
+                        Console.WriteLine($"🎟️ Token: {respuestaAutenticacion.Token.Substring(0, Math.Min(50, respuestaAutenticacion.Token.Length))}...");
                     }
                     else
                     {
@@ -150,6 +227,24 @@ namespace ProyectoFarmaVita.Services.LoginServices
                 else
                 {
                     Console.WriteLine("❌ Contraseña incorrecta");
+
+                    // DEBUG ADICIONAL: Probar con contraseñas comunes para debug
+                    Console.WriteLine("🔧 === DEBUG: PROBANDO CONTRASEÑAS COMUNES ===");
+                    string[] passwordsComunes = { "admin", "123456", "password", "farmaceuta", "123", "admin123" };
+
+                    foreach (var testPassword in passwordsComunes)
+                    {
+                        var testHash = HashPassword(testPassword);
+                        bool testMatch = string.Equals(testHash, persona.Contraseña, StringComparison.Ordinal);
+                        Console.WriteLine($"🔧 Test '{testPassword}' -> Hash: '{testHash}' -> Match: {testMatch}");
+                        if (testMatch)
+                        {
+                            Console.WriteLine($"🎯 ¡ENCONTRADA! La contraseña original es: '{testPassword}'");
+                            break;
+                        }
+                    }
+                    Console.WriteLine("🔧 === FIN DEBUG CONTRASEÑAS COMUNES ===");
+
                     respuestaAutenticacion.Error = "Credenciales incorrectas";
                     return respuestaAutenticacion;
                 }

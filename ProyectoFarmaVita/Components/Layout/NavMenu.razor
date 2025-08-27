@@ -1,10 +1,12 @@
 ﻿@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@using ProyectoFarmaVita.Services.AuthorizationServices
 @using ProyectoFarmaVita.Services.LoginServices
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject CustomAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
+@inject IRoleAuthorizationService RoleAuth
 @attribute [Authorize]
 @implements IDisposable
 
@@ -46,55 +48,62 @@
         </Authorized>
     </AuthorizeView>
 
-    <!-- Gestión de Personas -->
-    <AuthorizeView Roles="Administrador,Gerente">
+    <!-- Gestión de Personas - Solo Administrador y Gerente -->
+    @if (CanAccess("usuarios"))
+    {
         <MudNavGroup Title="Gestión de Personas" Icon="@Icons.Material.Filled.Group" Expanded="false">
             <MudNavLink Href="personas" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
             <MudNavLink Href="estadocivil" Icon="@Icons.Material.Filled.Favorite">Estado Civil</MudNavLink>
             <MudNavLink Href="Genero" Icon="@Icons.Material.Filled.Wc">Género</MudNavLink>
         </MudNavGroup>
-    </AuthorizeView>
+    }
 
-    <!-- Gestión Laboral -->
-    <AuthorizeView Roles="Administrador,Gerente">
+    <!-- Gestión Laboral - Solo Administrador y Gerente -->
+    @if (CanAccess("usuarios"))
+    {
         <MudNavGroup Title="Gestión Laboral" Icon="@Icons.Material.Filled.Schedule" Expanded="false">
             <MudNavLink Href="turnotrabajo" Icon="@Icons.Material.Filled.AccessTime">Turno Trabajo</MudNavLink>
             <MudNavLink Href="asignacion-turno" Icon="@Icons.Material.Filled.AssignmentTurnedIn">Asignación Turno</MudNavLink>
         </MudNavGroup>
-    </AuthorizeView>
+    }
 
-    <!-- Ubicación Geográfica -->
-    <AuthorizeView Roles="Administrador,Gerente">
+    <!-- Ubicación Geográfica - Solo Administrador y Gerente -->
+    @if (CanAccess("sucursales"))
+    {
         <MudNavGroup Title="Ubicación Geográfica" Icon="@Icons.Material.Filled.LocationOn" Expanded="false">
             <MudNavLink Href="sucursal" Icon="@Icons.Material.Filled.Business">Sucursales</MudNavLink>
             <MudNavLink Href="departamento" Icon="@Icons.Material.Filled.Map">Departamento</MudNavLink>
             <MudNavLink Href="municipio" Icon="@Icons.Material.Filled.LocationCity">Municipio</MudNavLink>
         </MudNavGroup>
-    </AuthorizeView>
+    }
 
-    <!-- Gestión de Productos -->
-    <AuthorizeView Roles="Administrador,Gerente,Farmaceuta">
+    <!-- Gestión de Productos - Administrador, Gerente, Farmaceuta -->
+    @if (CanAccess("productos"))
+    {
         <MudNavGroup Title="Gestión de Productos" Icon="@Icons.Material.Filled.Medication" Expanded="false">
             <MudNavLink Href="categoria" Icon="@Icons.Material.Filled.Category">Categorías</MudNavLink>
             <MudNavLink Href="proveedor" Icon="@Icons.Material.Filled.LocalShipping">Proveedores</MudNavLink>
             <MudNavLink Href="producto" Icon="@Icons.Material.Filled.Healing">Productos</MudNavLink>
         </MudNavGroup>
-    </AuthorizeView>
+    }
 
-    <!-- Gestión de Inventarios -->
+    <!-- Gestión de Inventarios - Todos los roles autenticados -->
     <AuthorizeView>
-        <MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
-            <MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
-        </MudNavGroup>
+        <Authorized>
+            <MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
+                <MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
+            </MudNavGroup>
+        </Authorized>
     </AuthorizeView>
 
-    <!-- Ventas -->
-    <AuthorizeView Roles="Farmaceuta,Cajero,Vendedor">
+    <!-- Ventas - Farmaceuta, Cajero, Vendedor -->
+    @if (CanAccess("ventas"))
+    {
         <MudNavGroup Title="Ventas" Icon="@Icons.Material.Filled.ShoppingCart" Expanded="false">
             <MudNavLink Href="ventas" Icon="@Icons.Material.Filled.PointOfSale">Realizar Venta</MudNavLink>
             <MudNavLink Href="historial-ventas" Icon="@Icons.Material.Filled.History">Historial de Ventas</MudNavLink>
         </MudNavGroup>
-    </AuthorizeView>
+    }
 
     <!-- Botón de Logout -->
     <AuthorizeView>
@@ -113,10 +122,12 @@
     private string _nombreUsuario = string.Empty;
     private string _rolUsuario = string.Empty;
     private bool _disposed = false;
+    private List<string> userPermissions = new();
 
     protected override async Task OnInitializedAsync()
     {
         await ActualizarDatosUsuario();
+        await CargarPermisos();
 
         // Suscribirse a cambios de autenticación
         AuthStateProvider.AuthenticationStateChanged += AuthenticationStateChangedHandler;
@@ -155,6 +166,35 @@
         }
     }
 
+    private async Task CargarPermisos()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity.IsAuthenticated)
+            {
+                userPermissions = await RoleAuth.GetUserPermissionsAsync();
+                Console.WriteLine($"🔐 Permisos cargados: [{string.Join(", ", userPermissions)}]");
+            }
+            else
+            {
+                userPermissions.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cargando permisos: {ex.Message}");
+            userPermissions.Clear();
+        }
+    }
+
+    private bool CanAccess(string permission)
+    {
+        var hasPermission = userPermissions.Contains(permission);
+        Console.WriteLine($"🔍 Verificando permiso '{permission}': {hasPermission}");
+        return hasPermission;
+    }
+
     private async void AuthenticationStateChangedHandler(Task<AuthenticationState> task)
     {
         if (_disposed) return;
@@ -163,6 +203,7 @@
         {
             var authState = await task;
             await ActualizarDatosUsuario();
+            await CargarPermisos();
 
             if (!_disposed)
             {
