@@ -1,44 +1,32 @@
 ﻿@page "/"
-@using Microsoft.AspNetCore.Authorization
+
 @using Microsoft.AspNetCore.Components.Authorization
-@attribute [Authorize]
-@inject AuthenticationStateProvider AuthProvider
+@inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>FarmaVita - Dashboard</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
-    <MudGrid>
-        <!-- Header de bienvenida simple -->
-        <MudItem xs="12">
-            <MudPaper Elevation="3" Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white;">
-                <MudGrid AlignItems="Center" Justify="Justify.Center">
-                    <MudItem xs="12" Class="text-center">
-                        <MudStack Spacing="2" AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Filled.LocalPharmacy" Size="Size.Large" Style="font-size: 4rem;" />
-                            <MudText Typo="Typo.h3" Style="font-weight: 600;">
-                                ¡Bienvenido a FarmaVita!
-                            </MudText>
-                            <AuthorizeView>
-                                <Authorized>
-                                    <MudText Typo="Typo.h5" Class="mt-2">
-                                        Hola, <strong>@GetUserName()</strong>
-                                    </MudText>
-                                </Authorized>
-                            </AuthorizeView>
-                        </MudStack>
-                    </MudItem>
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
-</MudContainer>
+<MudPaper Class="p-4">
+    <AuthorizeView>
+        <Authorized>
+            <MudText Typo="Typo.h5" Class="mt-2">
+                Hola, <strong>@userName</strong>
+            </MudText>
+        </Authorized>
+        <NotAuthorized>
+            <MudText Typo="Typo.h6" Class="mt-2">
+                No has iniciado sesión.
+            </MudText>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudPaper>
 
 @code {
-    private string GetUserName()
+    private string userName = "Usuario";
+
+    protected override async Task OnInitializedAsync()
     {
-        var authState = AuthProvider.GetAuthenticationStateAsync().Result;
-        return authState.User.FindFirst("nombre")?.Value ??
-               authState.User.Identity?.Name ??
-               "Usuario";
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Obtener el nombre del claim "nombre", si no existe usar Identity.Name
+        userName = user.FindFirst("nombre")?.Value ?? user.Identity?.Name ?? "Usuario";
     }
 }
