@@ -3,10 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using ProyectoFarmaVita.Components;
 using ProyectoFarmaVita.Models;
-using ProyectoFarmaVita.Services.AperturaCajaServices;
 using ProyectoFarmaVita.Services.AsignacionTurnoServices;
 using ProyectoFarmaVita.Services.AuthorizationServices;
-using ProyectoFarmaVita.Services.CajaServices;
 using ProyectoFarmaVita.Services.CategoriaProductoService;
 using ProyectoFarmaVita.Services.CategoriaServices;
 using ProyectoFarmaVita.Services.DepartamentoServices;
@@ -23,7 +21,6 @@ using ProyectoFarmaVita.Services.ProductoServices;
 using ProyectoFarmaVita.Services.ProveedorServices;
 using ProyectoFarmaVita.Services.SucursalServices;
 using ProyectoFarmaVita.Services.TelefonoServices;
-using ProyectoFarmaVita.Services.TrasladoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoServices;
 
@@ -64,9 +61,6 @@ builder.Services.AddScoped<IProductoService, SProductoService>();
 builder.Services.AddScoped<IInventarioService, SInventarioService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<IRoleAuthorizationService, RoleAuthorizationService>();
-builder.Services.AddScoped<ICajaService, SCajaService>();
-builder.Services.AddScoped<IAperturaCajaService, SAperturaCajaService>();
-builder.Services.AddScoped<ITrasladoService, STrasladoService>();
 
 
 

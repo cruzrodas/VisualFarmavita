@@ -17,13 +17,9 @@ public partial class Traslado
 
     public string? Observaciones { get; set; }
 
-    public int? IdTrasladodetalles { get; set; }
-
     public virtual Estado? IdEstadoTrasladoNavigation { get; set; }
 
     public virtual Sucursal? IdSucursalDestinoNavigation { get; set; }
 
     public virtual Sucursal? IdSucursalOrigenNavigation { get; set; }
-
-    public virtual TrasladoDetalle? IdTrasladodetallesNavigation { get; set; }
 }

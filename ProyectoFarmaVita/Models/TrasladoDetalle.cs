@@ -13,9 +13,9 @@ public partial class TrasladoDetalle
 
     public int? IdEstado { get; set; }
 
+    public int? IdTraslado { get; set; }
+
     public virtual Estado? IdEstadoNavigation { get; set; }
 
     public virtual Producto? IdProductoNavigation { get; set; }
-
-    public virtual ICollection<Traslado> Traslado { get; set; } = new List<Traslado>();
 }

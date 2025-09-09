@@ -410,6 +410,8 @@ public partial class FarmaDbContext : DbContext
         {
             entity.HasKey(e => e.IdPersona);
 
+            entity.HasIndex(e => new { e.Email, e.Activo }, "IX_Persona_Email_Activo");
+
             entity.Property(e => e.IdPersona).HasColumnName("Id_Persona");
             entity.Property(e => e.Apellido)
                 .HasMaxLength(100)
@@ -547,6 +549,8 @@ public partial class FarmaDbContext : DbContext
         {
             entity.HasKey(e => e.IdRol);
 
+            entity.HasIndex(e => e.IdRol, "IX_Rol_IdRol");
+
             entity.Property(e => e.IdRol).HasColumnName("Id_Rol");
             entity.Property(e => e.DescripcionRol)
                 .HasMaxLength(100)
@@ -635,7 +639,6 @@ public partial class FarmaDbContext : DbContext
             entity.Property(e => e.IdEstadoTraslado).HasColumnName("Id_EstadoTraslado");
             entity.Property(e => e.IdSucursalDestino).HasColumnName("Id_SucursalDestino");
             entity.Property(e => e.IdSucursalOrigen).HasColumnName("Id_SucursalOrigen");
-            entity.Property(e => e.IdTrasladodetalles).HasColumnName("Id_trasladodetalles");
             entity.Property(e => e.Observaciones)
                 .HasMaxLength(150)
                 .IsUnicode(false);
@@ -651,10 +654,6 @@ public partial class FarmaDbContext : DbContext
             entity.HasOne(d => d.IdSucursalOrigenNavigation).WithMany(p => p.TrasladoIdSucursalOrigenNavigation)
                 .HasForeignKey(d => d.IdSucursalOrigen)
                 .HasConstraintName("FK_Traslado_Sucursal");
-
-            entity.HasOne(d => d.IdTrasladodetallesNavigation).WithMany(p => p.Traslado)
-                .HasForeignKey(d => d.IdTrasladodetalles)
-                .HasConstraintName("FK_Traslado_TrasladoDetalle");
         });
 
         modelBuilder.Entity<TrasladoDetalle>(entity =>
@@ -664,6 +663,7 @@ public partial class FarmaDbContext : DbContext
             entity.Property(e => e.IdTrasladoDetalle).HasColumnName("Id_TrasladoDetalle");
             entity.Property(e => e.IdEstado).HasColumnName("Id_Estado");
             entity.Property(e => e.IdProducto).HasColumnName("Id_Producto");
+            entity.Property(e => e.IdTraslado).HasColumnName("Id_Traslado");
 
             entity.HasOne(d => d.IdEstadoNavigation).WithMany(p => p.TrasladoDetalle)
                 .HasForeignKey(d => d.IdEstado)
