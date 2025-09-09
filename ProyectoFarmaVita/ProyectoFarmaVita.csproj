@@ -27,4 +27,8 @@
     <PackageReference Include="MudBlazor" Version="8.10.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Services\TrasladoServices\" />
+  </ItemGroup>
+
 </Project>
