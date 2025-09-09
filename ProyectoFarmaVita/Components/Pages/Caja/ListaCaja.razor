@@ -4,6 +4,7 @@
 @using ProyectoFarmaVita.Services.CajaServices
 @using ProyectoFarmaVita.Services.AperturaCajaServices
 @using MudBlazor
+@using Microsoft.AspNetCore.Components.Authorization
 
 @inject ICajaService CajaService
 @inject IAperturaCajaService AperturaCajaService
@@ -11,6 +12,7 @@
 @inject IJSRuntime JSRuntime
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <MudPaper Elevation="3" Class="pa-6">
 
@@ -72,7 +74,7 @@
                 }
                 <MudTd DataLabel="ID">@caja.IdCaja</MudTd>
                 <MudTd DataLabel="Nombre">@caja.NombreCaja</MudTd>
-                
+
                 <MudTd DataLabel="Acciones">
                     <div class="d-flex flex-wrap gap-2">
 
@@ -244,9 +246,42 @@
     private double diferenciaMonto = 0;
     private AperturaCaja? aperturaActual = null;
 
+    // SOLO AGREGAR ESTA VARIABLE
+    private int? currentUserId = null;
+
     protected override async Task OnInitializedAsync()
     {
+        // SOLO AGREGAR ESTA LÍNEA
+        await ObtenerUsuarioActual();
         await LoadPage(1);
+    }
+
+    // SOLO AGREGAR ESTE MÉTODO
+    private async Task ObtenerUsuarioActual()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity.IsAuthenticated)
+            {
+                var userIdClaim = user.FindFirst("id") ?? user.FindFirst("userId") ?? user.FindFirst("sub");
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    currentUserId = userId;
+                }
+                else
+                {
+                    currentUserId = 1; // TEMPORAL
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error obteniendo usuario actual: {ex.Message}");
+            currentUserId = 1; // Fallback temporal
+        }
     }
 
     private async Task LoadPage(int page)
@@ -300,6 +335,13 @@
     // Métodos para abrir caja
     private void AbrirCaja(int idCaja)
     {
+        // SOLO AGREGAR ESTA VALIDACIÓN
+        if (!currentUserId.HasValue)
+        {
+            Snackbar.Add("Error: No se pudo obtener la información del usuario actual", Severity.Error);
+            return;
+        }
+
         cajaSeleccionadaId = idCaja;
         montoApertura = 0;
         observacionesApertura = "";
@@ -330,7 +372,8 @@
                 return;
             }
 
-            var idPersonaActual = 1; // Temporal, reemplazar con el ID real del usuario logueado
+            // SOLO CAMBIAR ESTA LÍNEA
+            var idPersonaActual = currentUserId ?? 1; // Usar usuario actual o fallback
 
             var resultado = await AperturaCajaService.AbrirCajaAsync(
                 cajaSeleccionadaId,

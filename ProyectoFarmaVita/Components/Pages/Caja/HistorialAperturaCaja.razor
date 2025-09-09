@@ -1,5 +1,6 @@
 ﻿@page "/apertura-caja"
 @page "/apertura-caja/historial/{IdCaja:int?}"
+@implements IDisposable
 
 @using System.Text.Json
 @using ProyectoFarmaVita.Models
@@ -14,70 +15,57 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<h3 style="margin-bottom: 20px;">
-    @if (IdCaja.HasValue)
-    {
-        <text>Historial de Apertura - @(cajaSeleccionada?.NombreCaja ?? "Caja")</text>
-    }
-    else
-    {
-        <text>Historial de Aperturas de Caja</text>
-    }
-</h3>
+<h3 style="margin-bottom: 20px;">Apertura de Cajas</h3>
+
+@if (!IdCaja.HasValue)
+{
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               Class="mb-3"
+               OnClick="@(() => NavigationManager.NavigateTo("/apertura-caja/nueva"))">
+        Nueva Apertura
+    </MudButton>
+}
 
 <MudPaper Elevation="3" Class="pa-4">
-    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">
-        Historial de Aperturas de Caja
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        Aperturas de Caja
     </MudText>
 
-    <MudGrid Class="mt-2">
-        <MudItem xs="12" sm="4">
-            <MudTextField T="string" Label="Buscar"
-                          Variant="Variant.Outlined"
-                          @bind-Value="searchArea"
-                          Immediate="true"
-                          DebounceInterval="300"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          AdornmentColor="Color.Primary"
-                          OnDebounceIntervalElapsed="Search" />
-        </MudItem>
-
-        <MudItem xs="12" sm="4">
-            <MudDatePicker Label="Fecha Desde"
-                           @bind-Date="fechaDesde"
-                           @bind-Date:after="OnFechaChanged"
-                           Variant="Variant.Outlined" />
-        </MudItem>
-
-        <MudItem xs="12" sm="4">
-            <MudDatePicker Label="Fecha Hasta"
-                           @bind-Date="fechaHasta"
-                           @bind-Date:after="OnFechaChanged"
-                           Variant="Variant.Outlined" />
-        </MudItem>
-    </MudGrid>
-
-    <br />
+    <MudTextField T="string"
+                  Label="Buscar por Caja, Responsable u Observaciones"
+                  @bind-Value="searchTerm"
+                  @bind-Value:after="OnSearchChanged"
+                  Variant="Variant.Outlined"
+                  Adornment="Adornment.End"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Class="mb-4" />
 
     @if (isLoading)
     {
-        <div class="spinner-container">
-            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        <div class="d-flex justify-center align-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <MudText Class="ml-3" Typo="Typo.h6">Cargando aperturas de caja...</MudText>
         </div>
     }
-    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    else if (aperturasFiltered == null || !aperturasFiltered.Any())
     {
-        <MudAlert Severity="Severity.Info">No se encontraron registros de apertura de caja.</MudAlert>
+        <MudAlert Severity="Severity.Info" Class="my-4">
+            No se encontraron registros de apertura de caja.
+        </MudAlert>
     }
     else
     {
-        <MudTable T="AperturaCaja"
-                  ServerData="ServerReload"
+        <MudTable Items="@aperturasFiltered"
                   Dense="true"
                   Hover="true"
                   Bordered="true"
+                  Striped="true"
                   Loading="@isLoading"
                   RowClass="cursor-pointer"
+                  RowsPerPage="25"
+                  CurrentPage="@currentPage"
                   Class="printable-table">
 
             <HeaderContent>
@@ -145,34 +133,28 @@
                     }
                 </MudTd>
                 <MudTd DataLabel="Acciones" Class="acciones">
-                    <div class="d-grid gap-2 d-md-block">
-                        <MudButton Size="Size.Small"
-                                   Color="Color.Info"
-                                   Variant="Variant.Text"
+                    <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                        <MudButton Color="Color.Info"
                                    StartIcon="@Icons.Material.Filled.Visibility"
                                    OnClick="@(() => VerDetalle(context.IdAperturaCaja))">
-                            Ver Detalle
+                            Ver
                         </MudButton>
 
                         @if (context.Activa == true)
                         {
-                            <MudButton Size="Size.Small"
-                                       Color="Color.Error"
-                                       Variant="Variant.Filled"
+                            <MudButton Color="Color.Error"
                                        StartIcon="@Icons.Material.Filled.Close"
                                        OnClick="@(() => CerrarCaja(context.IdAperturaCaja))">
                                 Cerrar
                             </MudButton>
                         }
-                    </div>
+                    </MudButtonGroup>
                 </MudTd>
             </RowTemplate>
+
             <PagerContent>
-                <MudTablePager RowsPerPageString="Aperturas por página:"
-                               InfoFormat="@infoFormat"
-                               PageSizeOptions="new int[] { 20, 25, 30, 40, int.MaxValue }"
-                               OnPageChanged="LoadPage"
-                               Class="acciones" />
+                <MudTablePager RowsPerPageString="Registros por página:"
+                               InfoFormat="@infoFormat" />
             </PagerContent>
         </MudTable>
     }
@@ -387,16 +369,19 @@
 @code {
     [Parameter] public int? IdCaja { get; set; }
 
-    private MPaginatedResult<AperturaCaja> paginatedResult;
+    // Variables principales
+    private bool _disposed = false;
+    private List<AperturaCaja> aperturas = new();
+    private List<AperturaCaja> aperturasFiltered = new();
     private bool isLoading = false;
+    private string searchTerm = "";
+    private int currentPage = 0;
     private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private Caja? cajaSeleccionada;
+
+    // Variables para diálogos
     private DialogOptions dialogOptions = new() { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
     private DialogOptions detalleDialogOptions = new() { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-    private const int PageSize = 25;
-    private string searchArea = "";
-    private DateTime? fechaDesde;
-    private DateTime? fechaHasta;
-    private Caja? cajaSeleccionada;
 
     // Variables para cerrar caja
     private bool showCerrarDialog = false;
@@ -411,9 +396,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (IdCaja.HasValue)
+        try
         {
-            try
+            if (IdCaja.HasValue)
             {
                 cajaSeleccionada = await CajaService.GetByIdAsync(IdCaja.Value);
                 if (cajaSeleccionada == null)
@@ -423,82 +408,40 @@
                     return;
                 }
             }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error al cargar la caja: {ex.Message}", Severity.Error);
-                NavigationManager.NavigateTo("/caja");
-                return;
-            }
-        }
 
-        await LoadPage(1);
-    }
-
-    private async Task LoadPage(int page)
-    {
-        isLoading = true;
-        StateHasChanged();
-
-        try
-        {
-            List<AperturaCaja> aperturas;
-
-            if (IdCaja.HasValue)
-            {
-                aperturas = await AperturaCajaService.GetByCajaAsync(IdCaja.Value);
-            }
-            else if (fechaDesde.HasValue && fechaHasta.HasValue)
-            {
-                aperturas = await AperturaCajaService.GetByRangoFechasAsync(fechaDesde.Value, fechaHasta.Value);
-            }
-            else if (fechaDesde.HasValue)
-            {
-                aperturas = await AperturaCajaService.GetByFechaAsync(fechaDesde.Value);
-            }
-            else
-            {
-                aperturas = await AperturaCajaService.GetAllAsync();
-            }
-
-            // Filtrar por término de búsqueda si existe
-            if (!string.IsNullOrEmpty(searchArea))
-            {
-                aperturas = aperturas.Where(a =>
-                    (a.IdCajaNavigation?.NombreCaja?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
-                    (a.IdPersonaNavigation?.Nombre?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
-                    (a.IdPersonaNavigation?.Apellido?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
-                    (a.Observaciones?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true)
-                ).ToList();
-            }
-
-            // Ordenar por fecha de apertura descendente
-            aperturas = aperturas.OrderByDescending(a => a.FechaApertura).ToList();
-
-            // Simular paginación
-            var totalItems = aperturas.Count;
-            var items = aperturas
-                .Skip((page - 1) * PageSize)
-                .Take(PageSize)
-                .ToList();
-
-            paginatedResult = new MPaginatedResult<AperturaCaja>
-            {
-                Items = items,
-                TotalCount = totalItems,
-                PageNumber = page,
-                PageSize = PageSize
-            };
+            await CargarDatos();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error al cargar datos: {ex.Message}", Severity.Error);
-            paginatedResult = new MPaginatedResult<AperturaCaja>
+            Snackbar.Add($"Error al cargar los datos: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CargarDatos()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            aperturas = await AperturaCajaService.GetAllAsync();
+
+            // Filtrar por caja si es necesario
+            if (IdCaja.HasValue && aperturas != null)
             {
-                Items = new List<AperturaCaja>(),
-                TotalCount = 0,
-                PageNumber = page,
-                PageSize = PageSize
-            };
+                aperturas = aperturas.Where(a => a.IdCaja == IdCaja.Value).ToList();
+            }
+
+            // Aplicar filtros
+            AplicarFiltros();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar los datos: {ex.Message}", Severity.Error);
+            aperturas = new List<AperturaCaja>();
+            aperturasFiltered = new List<AperturaCaja>();
         }
         finally
         {
@@ -507,25 +450,38 @@
         }
     }
 
-    private async Task<TableData<AperturaCaja>> ServerReload(TableState state, CancellationToken cancellationToken)
+    private void AplicarFiltros()
     {
-        await LoadPage(state.Page + 1);
-
-        return new TableData<AperturaCaja>
+        if (aperturas == null)
         {
-            Items = paginatedResult?.Items ?? new List<AperturaCaja>(),
-            TotalItems = paginatedResult?.TotalCount ?? 0
-        };
+            aperturasFiltered = new List<AperturaCaja>();
+            return;
+        }
+
+        aperturasFiltered = aperturas.ToList();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var termino = searchTerm.ToLower().Trim();
+            aperturasFiltered = aperturas.Where(a =>
+                (a.IdCajaNavigation?.NombreCaja?.ToLower().Contains(termino) == true) ||
+                (a.IdPersonaNavigation?.Nombre?.ToLower().Contains(termino) == true) ||
+                (a.IdPersonaNavigation?.Apellido?.ToLower().Contains(termino) == true) ||
+                (a.Observaciones?.ToLower().Contains(termino) == true)
+            ).ToList();
+        }
+
+        // Ordenar por fecha de apertura descendente
+        aperturasFiltered = aperturasFiltered
+            .OrderByDescending(a => a.FechaApertura ?? DateTime.MinValue)
+            .ToList();
+
+        StateHasChanged();
     }
 
-    private async Task Search()
+    private void OnSearchChanged()
     {
-        await LoadPage(1);
-    }
-
-    private async Task OnFechaChanged()
-    {
-        await LoadPage(1);
+        AplicarFiltros();
     }
 
     // Métodos para cerrar caja
@@ -577,7 +533,6 @@
                 return;
             }
 
-            // Validar longitud de observaciones
             if (!string.IsNullOrEmpty(observacionesCierre) && observacionesCierre.Length > 150)
             {
                 Snackbar.Add("Las observaciones no pueden exceder 150 caracteres", Severity.Error);
@@ -593,7 +548,7 @@
             {
                 Snackbar.Add("Caja cerrada correctamente", Severity.Success);
                 CancelarCierre();
-                await LoadPage(1); // Recargar la tabla
+                await CargarDatos();
             }
             else
             {
@@ -640,5 +595,13 @@
     {
         showDetalleDialog = false;
         aperturaDetalle = null;
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+        }
     }
 }

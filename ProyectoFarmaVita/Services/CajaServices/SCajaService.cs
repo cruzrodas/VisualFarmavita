@@ -37,7 +37,7 @@ namespace ProyectoFarmaVita.Services.CajaServices
                     // Actualizar todas las propiedades necesarias
                     existingCaja.NombreCaja = caja.NombreCaja;
                     existingCaja.IdSucursal = caja.IdSucursal;
-                    existingCaja.Activa = caja.Activa; // ESTA LÍNEA FALTABA - FIX PRINCIPAL
+                    existingCaja.Activa = caja.Activa; // ← CORRECCIÓN PRINCIPAL
 
                     // Marcar la caja como modificada
                     _farmaDbContext.Caja.Update(existingCaja);
@@ -49,15 +49,14 @@ namespace ProyectoFarmaVita.Services.CajaServices
             }
             else
             {
+                // Para nuevas cajas, establecer por defecto como activa
                 caja.Activa = true;
-
-                // Si no hay ID, se trata de una nueva caja, agregarla
                 _farmaDbContext.Caja.Add(caja);
             }
 
             // Guardar los cambios en la base de datos
             await _farmaDbContext.SaveChangesAsync();
-            return true; // Retornar true si se ha agregado o actualizado correctamente
+            return true;
         }
 
         public async Task<bool> DeleteAsync(int idCaja)
@@ -133,6 +132,7 @@ namespace ProyectoFarmaVita.Services.CajaServices
             var query = _farmaDbContext.Caja
                 .Include(c => c.IdSucursalNavigation)
                 .Include(c => c.AperturaCaja.Where(a => a.Activa == true))
+                    .ThenInclude(a => a.IdPersonaNavigation) // Incluir persona responsable
                 .Where(c => c.Activa == true) // Solo cajas activas
                 .AsQueryable();
 
@@ -151,7 +151,6 @@ namespace ProyectoFarmaVita.Services.CajaServices
 
             var totalItems = await query.CountAsync();
 
-            // Aplicar paginación
             var items = await query
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
@@ -171,18 +170,15 @@ namespace ProyectoFarmaVita.Services.CajaServices
             return await _farmaDbContext.Caja
                 .Include(c => c.IdSucursalNavigation)
                 .Include(c => c.AperturaCaja.Where(a => a.Activa == true))
-                .Where(c => c.Activa == true && c.IdSucursal == idSucursal)
+                .Where(c => c.IdSucursal == idSucursal && c.Activa == true)
                 .OrderBy(c => c.NombreCaja)
                 .ToListAsync();
         }
 
         public async Task<bool> ExistsByNombreAsync(string nombreCaja, int? excludeId = null)
         {
-            if (string.IsNullOrEmpty(nombreCaja))
-                return false;
-
             var query = _farmaDbContext.Caja
-                .Where(c => c.NombreCaja.ToLower() == nombreCaja.ToLower() && c.Activa == true);
+                .Where(c => c.NombreCaja == nombreCaja && c.Activa == true);
 
             if (excludeId.HasValue)
             {
@@ -196,16 +192,14 @@ namespace ProyectoFarmaVita.Services.CajaServices
         {
             var query = _farmaDbContext.Caja
                 .Include(c => c.IdSucursalNavigation)
-                .Include(c => c.AperturaCaja)
-                .Where(c => c.Activa == true);
+                .Include(c => c.AperturaCaja.Where(a => a.Activa == true))
+                .Where(c => c.Activa == true)
+                .AsQueryable();
 
             if (sucursalId.HasValue)
             {
                 query = query.Where(c => c.IdSucursal == sucursalId.Value);
             }
-
-            // Cajas que no tienen aperturas activas
-            query = query.Where(c => !c.AperturaCaja.Any(a => a.Activa == true));
 
             return await query
                 .OrderBy(c => c.NombreCaja)
