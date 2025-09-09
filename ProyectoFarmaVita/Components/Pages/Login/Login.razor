@@ -7,7 +7,6 @@
 @inject ILogger<Login> logger
 @inject ISnackbar Snackbar
 @inject CustomAuthenticationStateProvider customAuthenticationStateProvider
-@inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
 <PageTitle>FarmaVita - Iniciar Sesión</PageTitle>
@@ -48,13 +47,13 @@
                                 <MudTextField Label="Contraseña"
                                               @bind-Value="credencialesUsuario.Password"
                                               For="@(() => credencialesUsuario.Password)"
-                                              InputType="@passwordInput"
+                                              InputType="@(passwordVisible? InputType.Text: InputType.Password)"
                                               Required="true"
                                               Variant="Variant.Outlined"
                                               FullWidth="true"
                                               Adornment="Adornment.End"
                                               AdornmentIcon="@(passwordVisible? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                              OnAdornmentClick="PasswordVisibility"
+                                              OnAdornmentClick="@TogglePasswordVisibility"
                                               Disabled="@isLoading" />
 
                                 <MudButton ButtonType="ButtonType.Submit"
@@ -85,120 +84,87 @@
 }
 
 @code {
-    private CredencialesUsuario credencialesUsuario = new CredencialesUsuario();
+    private CredencialesUsuario credencialesUsuario = new();
     private string errorMessage = string.Empty;
-    private bool passwordVisible = false;
-    private InputType passwordInput = InputType.Password;
-    private bool isLoading = false;
-    private bool isUserAuthenticated = false;
+    private bool passwordVisible;
+    private bool isLoading;
+    private bool isUserAuthenticated;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            Console.WriteLine("🚀 Login - OnInitializedAsync iniciado");
-
-            // Verificar si el usuario ya está autenticado
             var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
-            isUserAuthenticated = authState?.User?.Identity?.IsAuthenticated ?? false;
+            isUserAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
 
-            Console.WriteLine($"🔍 Estado inicial de autenticación: {isUserAuthenticated}");
-
-            // Solo redirigir si estamos en /login y el usuario ya tiene sesión
             if (isUserAuthenticated && NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("✅ Usuario ya autenticado, redirigiendo a inicio...");
                 NavigationManager.NavigateTo("/", replace: true);
-                return;
             }
-
-            StateHasChanged();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error inicializando login component");
-            Console.WriteLine($"❌ Error en OnInitializedAsync: {ex.Message}");
+            errorMessage = "Error cargando el componente de login.";
         }
     }
 
-    private void PasswordVisibility()
+    private void TogglePasswordVisibility()
     {
         passwordVisible = !passwordVisible;
-        passwordInput = passwordVisible ? InputType.Text : InputType.Password;
     }
 
     private async Task HandleLogin()
     {
         isLoading = true;
         errorMessage = string.Empty;
-        StateHasChanged();
 
         try
         {
-            Console.WriteLine("🚀 Iniciando proceso de login...");
+            var respuesta = await LoginService.Login(credencialesUsuario);
 
-            var respuestaAutenticacion = await LoginService.Login(credencialesUsuario);
-
-            if (!string.IsNullOrEmpty(respuestaAutenticacion.Token))
+            if (string.IsNullOrEmpty(respuesta?.Token))
             {
-                Console.WriteLine("✅ Login exitoso, guardando token...");
+                MostrarError(respuesta?.Error ?? "Credenciales incorrectas.");
+                return;
+            }
 
-                // Guardar token
-                await customAuthenticationStateProvider.SetTokenAsync(respuestaAutenticacion.Token);
+            await customAuthenticationStateProvider.SetTokenAsync(respuesta.Token);
 
-                // Esperar un momento para que el estado se actualice
-                await Task.Delay(100);
+            // Re-obtener autenticación
+            var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated ?? false)
+            {
+                var userName = authState.User.FindFirst("nombre")?.Value
+                             ?? authState.User.Identity?.Name
+                             ?? "Usuario";
 
-                // Verificar autenticación después
-                var authState = await customAuthenticationStateProvider.GetAuthenticationStateAsync();
-                var isAuthenticated = authState?.User?.Identity?.IsAuthenticated ?? false;
-
-                Console.WriteLine($"🔍 Estado después del login: {isAuthenticated}");
-
-                if (isAuthenticated)
-                {
-                    var userName = authState.User.FindFirst("nombre")?.Value ??
-                                   authState.User.Identity?.Name ??
-                                   "Usuario";
-
-                    Console.WriteLine($"👤 Usuario autenticado: {userName}");
-                    Snackbar.Add($"¡Bienvenido, {userName}!", Severity.Success);
-
-                    isUserAuthenticated = true;
-                    StateHasChanged();
-
-                    await Task.Delay(500);
-                    NavigationManager.NavigateTo("/", replace: true);
-                }
-                else
-                {
-                    errorMessage = "Error de autenticación. Por favor, intente nuevamente.";
-                    Snackbar.Add(errorMessage, Severity.Error);
-                    await customAuthenticationStateProvider.LogoutAsync();
-                }
+                Snackbar.Add($"¡Bienvenido, {userName}!", Severity.Success);
+                NavigationManager.NavigateTo("/", replace: true);
+                isUserAuthenticated = true;
             }
             else
             {
-                errorMessage = respuestaAutenticacion.Error ?? "Credenciales incorrectas.";
-                Snackbar.Add(errorMessage, Severity.Error);
+                MostrarError("Error de autenticación. Intente nuevamente.");
+                await customAuthenticationStateProvider.LogoutAsync();
             }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error durante inicio de sesión");
-            Console.WriteLine($"❌ Error en HandleLogin: {ex.Message}");
-            errorMessage = "Ocurrió un error inesperado. Intente nuevamente.";
-            Snackbar.Add(errorMessage, Severity.Error);
+            MostrarError("Ocurrió un error inesperado. Intente nuevamente.");
         }
         finally
         {
             isLoading = false;
-            StateHasChanged();
         }
     }
 
-    public void Dispose()
+    private void MostrarError(string mensaje)
     {
-        // Aquí podrías limpiar suscripciones si las tuvieras
+        errorMessage = mensaje;
+        Snackbar.Add(errorMessage, Severity.Error);
     }
+
+    public void Dispose() { }
 }

@@ -1,0 +1,442 @@
+﻿@page "/traslados/crear"
+@page "/traslados/editar/{IdTraslado:int}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.TrasladoService
+@using ProyectoFarmaVita.Services.SucursalServices
+@using ProyectoFarmaVita.Services.ProductoService
+@using MudBlazor
+
+@inject ITrasladoService TrasladoServices
+@inject ISucursalService SucursalServices
+@inject IProductoService ProductoServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
+    <MudPaper Elevation="3" Class="pa-4">
+
+        <!-- Header -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" Class="d-flex justify-space-between align-center">
+                <MudText Typo="Typo.h4" Class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-3" Size="Size.Large" />
+                    @(IsEditing ? "Editar Traslado" : "Nuevo Traslado")
+                </MudText>
+                <MudButton Variant="Variant.Text"
+                           StartIcon="@Icons.Material.Filled.ArrowBack"
+                           OnClick="@(() => NavigationManager.NavigateTo("/traslados"))">
+                    Volver a Lista
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <EditForm Model="@traslado" OnValidSubmit="@GuardarTraslado">
+            <DataAnnotationsValidator />
+
+            <MudGrid>
+                <!-- Información Principal del Traslado -->
+                <MudItem xs="12">
+                    <MudCard Elevation="2" Class="mb-4">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Información del Traslado</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect T="int?"
+                                               Value="traslado.IdSucursalOrigen"
+                                               ValueChanged="OnSucursalOrigenChanged"
+                                               Label="Sucursal Origen *"
+                                               Variant="Variant.Outlined">
+                                        @if (sucursales != null)
+                                        {
+                                            @foreach (var sucursal in sucursales)
+                                            {
+                                                <MudSelectItem T="int?" Value="@sucursal.IdSucursal">
+                                                    @sucursal.NombreSucursal
+                                                </MudSelectItem>
+                                            }
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect T="int?"
+                                               Value="traslado.IdSucursalDestino"
+                                               ValueChanged="OnSucursalDestinoChanged"
+                                               Label="Sucursal Destino *"
+                                               Variant="Variant.Outlined">
+                                        @if (sucursalesDestino != null)
+                                        {
+                                            @foreach (var sucursal in sucursalesDestino)
+                                            {
+                                                <MudSelectItem T="int?" Value="@sucursal.IdSucursal">
+                                                    @sucursal.NombreSucursal
+                                                </MudSelectItem>
+                                            }
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="traslado.Observaciones"
+                                                  Label="Observaciones"
+                                                  Variant="Variant.Outlined"
+                                                  Lines="3" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <!-- Productos Disponibles -->
+                @if (traslado.IdSucursalOrigen.HasValue)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="2" Class="mb-4" Style="height: 500px;">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">Productos Disponibles</MudText>
+                            </MudCardHeader>
+                            <MudCardContent Style="height: 400px; overflow-y: auto;">
+                                @if (loadingProductos)
+                                {
+                                    <MudProgressCircular />
+                                    <MudText>Cargando...</MudText>
+                                }
+                                else if (productosDisponibles != null && productosDisponibles.Any())
+                                {
+                                    @foreach (var producto in productosDisponibles)
+                                    {
+                                        <MudPaper Class="pa-2 mb-2" Elevation="1">
+                                            <div class="d-flex justify-space-between align-center">
+                                                <div>
+                                                    <MudText>@GetNombreProducto(producto)</MudText>
+                                                    <MudText Typo="Typo.body2">Stock: @GetStock(producto)</MudText>
+                                                </div>
+                                                <MudButton Size="Size.Small"
+                                                           Color="Color.Primary"
+                                                           OnClick="@(() => AgregarProducto(producto))"
+                                                           Disabled="@(GetStock(producto) <= 0 || ProductoYaAgregado(producto))">
+                                                    Agregar
+                                                </MudButton>
+                                            </div>
+                                        </MudPaper>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText>No hay productos disponibles</MudText>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- Productos Seleccionados -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="2" Class="mb-4" Style="height: 500px;">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">Productos Seleccionados (@productosSeleccionados.Count)</MudText>
+                            </MudCardHeader>
+                            <MudCardContent Style="height: 400px; overflow-y: auto;">
+                                @if (productosSeleccionados.Any())
+                                {
+                                    @foreach (var item in productosSeleccionados)
+                                    {
+                                        <MudPaper Class="pa-2 mb-2" Elevation="1">
+                                            <div class="d-flex justify-space-between align-center mb-2">
+                                                <MudText>@item.NombreProducto</MudText>
+                                                <MudButton Size="Size.Small"
+                                                           Color="Color.Error"
+                                                           OnClick="@(() => RemoverProducto(item))">
+                                                    Quitar
+                                                </MudButton>
+                                            </div>
+                                            <div class="d-flex align-center">
+                                                <MudText Class="mr-2">Cantidad:</MudText>
+                                                <MudNumericField T="int"
+                                                                 @bind-Value="item.CantidadTraslado"
+                                                                 Min="1"
+                                                                 Max="@((int)item.StockDisponible)"
+                                                                 Style="max-width: 100px;" />
+                                            </div>
+                                        </MudPaper>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText>No hay productos seleccionados</MudText>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+
+                <!-- Botones -->
+                <MudItem xs="12" Class="d-flex justify-end gap-2">
+                    <MudButton Variant="Variant.Outlined"
+                               OnClick="@(() => NavigationManager.NavigateTo("/traslados"))">
+                        Cancelar
+                    </MudButton>
+
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(saving || !productosSeleccionados.Any())">
+                        @if (saving)
+                        {
+                            <MudText>Guardando...</MudText>
+                        }
+                        else
+                        {
+                            <MudText>@(IsEditing ? "Actualizar" : "Crear")</MudText>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter] public int? IdTraslado { get; set; }
+
+    private Traslado traslado = new();
+    private List<Sucursal> sucursales = new();
+    private List<Sucursal> sucursalesDestino = new();
+    private List<InventarioProducto> productosDisponibles = new();
+    private List<ProductoTrasladoModel> productosSeleccionados = new();
+
+    private bool IsEditing => IdTraslado.HasValue && IdTraslado.Value > 0;
+    private bool saving = false;
+    private bool loadingProductos = false;
+
+    public class ProductoTrasladoModel
+    {
+        public int IdProducto { get; set; }
+        public string NombreProducto { get; set; } = "";
+        public long StockDisponible { get; set; }
+        public int CantidadTraslado { get; set; } = 1;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSucursales();
+        if (IsEditing)
+        {
+            await LoadTraslado();
+        }
+    }
+
+    private async Task LoadSucursales()
+    {
+        try
+        {
+            sucursales = await SucursalServices.GetAllAsync();
+            sucursalesDestino = sucursales.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar sucursales", Severity.Error);
+        }
+    }
+
+    private async Task LoadTraslado()
+    {
+        if (!IdTraslado.HasValue) return;
+
+        try
+        {
+            traslado = await TrasladoServices.GetByIdAsync(IdTraslado.Value);
+            if (traslado.IdSucursalOrigen.HasValue)
+            {
+                await OnSucursalOrigenChanged(traslado.IdSucursalOrigen);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar traslado", Severity.Error);
+            NavigationManager.NavigateTo("/traslados");
+        }
+    }
+
+    private async Task OnSucursalOrigenChanged(int? value)
+    {
+        traslado.IdSucursalOrigen = value;
+
+        if (value.HasValue)
+        {
+            sucursalesDestino = sucursales.Where(s => s.IdSucursal != value.Value).ToList();
+
+            if (traslado.IdSucursalDestino == value.Value)
+            {
+                traslado.IdSucursalDestino = null;
+            }
+
+            await LoadProductosDisponibles(value.Value);
+
+            if (!IsEditing)
+            {
+                productosSeleccionados.Clear();
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnSucursalDestinoChanged(int? value)
+    {
+        traslado.IdSucursalDestino = value;
+        StateHasChanged();
+    }
+
+    private async Task LoadProductosDisponibles(int sucursalId)
+    {
+        loadingProductos = true;
+        try
+        {
+            productosDisponibles = await TrasladoServices.GetProductosDisponiblesParaTrasladoAsync(sucursalId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar productos", Severity.Error);
+            productosDisponibles = new List<InventarioProducto>();
+        }
+        finally
+        {
+            loadingProductos = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetNombreProducto(InventarioProducto producto)
+    {
+        return producto?.IdProductoNavigation?.NombreProducto ?? "Sin nombre";
+    }
+
+    private long GetStock(InventarioProducto producto)
+    {
+        return producto?.Cantidad ?? 0;
+    }
+
+    private bool ProductoYaAgregado(InventarioProducto producto)
+    {
+        if (!producto.IdProducto.HasValue) return false;
+        return productosSeleccionados.Any(p => p.IdProducto == producto.IdProducto.Value);
+    }
+
+    private void AgregarProducto(InventarioProducto producto)
+    {
+        if (ProductoYaAgregado(producto) || !producto.IdProducto.HasValue) return;
+
+        var productoTraslado = new ProductoTrasladoModel
+        {
+            IdProducto = producto.IdProducto.Value,
+            NombreProducto = GetNombreProducto(producto),
+            StockDisponible = GetStock(producto),
+            CantidadTraslado = 1
+        };
+
+        productosSeleccionados.Add(productoTraslado);
+        StateHasChanged();
+    }
+
+    private void RemoverProducto(ProductoTrasladoModel producto)
+    {
+        productosSeleccionados.Remove(producto);
+        StateHasChanged();
+    }
+
+    private async Task GuardarTraslado()
+    {
+        if (!productosSeleccionados.Any())
+        {
+            Snackbar.Add("Debe agregar al menos un producto", Severity.Warning);
+            return;
+        }
+
+        if (traslado.IdSucursalOrigen == traslado.IdSucursalDestino)
+        {
+            Snackbar.Add("Las sucursales no pueden ser iguales", Severity.Warning);
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            if (!IsEditing)
+            {
+                traslado.FechaTraslado = DateTime.Now;
+            }
+
+            var success = await TrasladoServices.AddUpdateAsync(traslado);
+
+            if (success)
+            {
+                if (!IsEditing)
+                {
+                    await ObtenerIdTrasladoGenerado();
+                }
+
+                await GuardarDetallesTraslado();
+
+                Snackbar.Add($"Traslado {(IsEditing ? "actualizado" : "creado")} exitosamente", Severity.Success);
+                NavigationManager.NavigateTo("/traslados");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar traslado", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task ObtenerIdTrasladoGenerado()
+    {
+        try
+        {
+            var traslados = await TrasladoServices.GetAllAsync();
+            var ultimoTraslado = traslados
+                .Where(t => t.IdSucursalOrigen == traslado.IdSucursalOrigen &&
+                           t.IdSucursalDestino == traslado.IdSucursalDestino)
+                .OrderByDescending(t => t.IdTraslado)
+                .FirstOrDefault();
+
+            if (ultimoTraslado != null)
+            {
+                traslado.IdTraslado = ultimoTraslado.IdTraslado;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener ID: {ex.Message}");
+        }
+    }
+
+    private async Task GuardarDetallesTraslado()
+    {
+        foreach (var producto in productosSeleccionados)
+        {
+            try
+            {
+                await TrasladoServices.AddTrasladoDetalleAsync(
+                    traslado.IdTraslado,
+                    producto.IdProducto,
+                    producto.CantidadTraslado);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al guardar {producto.NombreProducto}", Severity.Warning);
+            }
+        }
+    }
+}

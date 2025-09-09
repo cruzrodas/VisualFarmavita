@@ -92,6 +92,8 @@
         <Authorized>
             <MudNavGroup Title="Gestión de Inventarios" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
                 <MudNavLink Href="inventario" Icon="@Icons.Material.Filled.Warehouse">Inventarios</MudNavLink>
+                <MudNavLink Href="traslados" Icon="@Icons.Material.Filled.Assignment">Lista de Traslados</MudNavLink>
+                <MudNavLink Href="traslados/crear" Icon="@Icons.Material.Filled.Add">Nuevo Traslado</MudNavLink>
             </MudNavGroup>
         </Authorized>
     </AuthorizeView>
@@ -104,6 +106,18 @@
             <MudNavLink Href="historial-ventas" Icon="@Icons.Material.Filled.History">Historial de Ventas</MudNavLink>
         </MudNavGroup>
     }
+
+    <!-- Gestión de Cajas - Administrador, Gerente, Cajero, Farmaceuta, Vendedor -->
+    @if (CanAccess("ventas"))
+    {
+        <MudNavGroup Title="Gestión de Cajas" Icon="@Icons.Material.Filled.PointOfSale" Expanded="false">
+            <MudNavLink Href="caja" Icon="@Icons.Material.Filled.AttachMoney">Cajas</MudNavLink>
+            <MudNavLink Href="apertura-caja" Icon="@Icons.Material.Filled.History">Control de Cajas</MudNavLink>
+            <MudNavLink Href="aperturacaja" Icon="@Icons.Material.Filled.AttachMoney">Apertura Caja</MudNavLink>
+        </MudNavGroup>
+    }
+
+
 
     <!-- Botón de Logout -->
     <AuthorizeView>

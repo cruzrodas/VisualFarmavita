@@ -1,0 +1,634 @@
+﻿@page "/traslados/detalle/{IdTraslado:int}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.TrasladoService
+@using MudBlazor
+
+@inject ITrasladoService TrasladoServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
+    <MudPaper Elevation="3" Class="pa-4">
+
+        @if (loading)
+        {
+            <div class="d-flex justify-center align-center" style="height: 400px;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                <MudText Class="ml-3" Typo="Typo.h6">Cargando detalle del traslado...</MudText>
+            </div>
+        }
+        else if (traslado == null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                No se encontró el traslado solicitado.
+            </MudAlert>
+            <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/traslados"))">
+                Volver a Lista
+            </MudButton>
+        }
+        else
+        {
+            <!-- Header -->
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" Class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.h4" Class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-3" Size="Size.Large" />
+                        Detalle del Traslado #@traslado.IdTraslado
+                    </MudText>
+                    <MudButtonGroup Variant="Variant.Outlined">
+                        <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+                                   OnClick="@(() => NavigationManager.NavigateTo("/traslados"))">
+                            Volver a Lista
+                        </MudButton>
+                        @if (traslado.IdEstadoTraslado == 1) // Pendiente
+                        {
+                            <MudButton Color="Color.Info"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       OnClick="@(() => NavigationManager.NavigateTo($"/traslados/editar/{traslado.IdTraslado}"))">
+                                Editar
+                            </MudButton>
+                        }
+                        <MudButton Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Print"
+                                   OnClick="@ImprimirTraslado">
+                            Imprimir
+                        </MudButton>
+                    </MudButtonGroup>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Estado del Traslado -->
+            <MudItem xs="12" Class="mb-4">
+                <MudAlert Severity="@GetSeverityFromEstado(traslado.IdEstadoTraslado)" Class="d-flex align-center">
+                    <MudIcon Icon="@GetIconFromEstado(traslado.IdEstadoTraslado)" Class="mr-2" />
+                    <div>
+                        <MudText Typo="Typo.subtitle1"><strong>Estado: @GetEstadoTexto(traslado.IdEstadoTraslado)</strong></MudText>
+                        @if (traslado.FechaTraslado.HasValue)
+                        {
+                            <MudText Typo="Typo.body2">
+                                Fecha: @traslado.FechaTraslado.Value.ToString("dd/MM/yyyy HH:mm")
+                            </MudText>
+                        }
+                    </div>
+                </MudAlert>
+            </MudItem>
+
+            <MudGrid>
+                <!-- Información Principal -->
+                <MudItem xs="12" md="8">
+                    <MudCard Elevation="2" Class="mb-4">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Información del Traslado</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudPaper Class="pa-3" Elevation="1">
+                                        <div class="d-flex align-center mb-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" Color="Color.Primary" />
+                                            <MudText Typo="Typo.subtitle2">Sucursal Origen</MudText>
+                                        </div>
+                                        <MudText Typo="Typo.h6">@(traslado.IdSucursalOrigenNavigation?.NombreSucursal ?? "N/A")</MudText>
+                                        @if (!string.IsNullOrEmpty(traslado.IdSucursalOrigenNavigation?.EmailSucursal))
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @traslado.IdSucursalOrigenNavigation.EmailSucursal
+                                            </MudText>
+                                        }
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudPaper Class="pa-3" Elevation="1">
+                                        <div class="d-flex align-center mb-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.Store" Class="mr-2" Color="Color.Secondary" />
+                                            <MudText Typo="Typo.subtitle2">Sucursal Destino</MudText>
+                                        </div>
+                                        <MudText Typo="Typo.h6">@(traslado.IdSucursalDestinoNavigation?.NombreSucursal ?? "N/A")</MudText>
+                                        @if (!string.IsNullOrEmpty(traslado.IdSucursalDestinoNavigation?.EmailSucursal))
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @traslado.IdSucursalDestinoNavigation.EmailSucursal
+                                            </MudText>
+                                        }
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudPaper Class="pa-3" Elevation="1">
+                                        <div class="d-flex align-center mb-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" Color="Color.Info" />
+                                            <MudText Typo="Typo.subtitle2">Fecha de Traslado</MudText>
+                                        </div>
+                                        <MudText Typo="Typo.h6">
+                                            @if (traslado.FechaTraslado.HasValue)
+                                            {
+                                                @traslado.FechaTraslado.Value.ToString("dd/MM/yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span>No definida</span>
+                                            }
+                                        </MudText>
+                                        @if (traslado.FechaTraslado.HasValue)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @traslado.FechaTraslado.Value.ToString("HH:mm")
+                                            </MudText>
+                                        }
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudPaper Class="pa-3" Elevation="1">
+                                        <div class="d-flex align-center mb-2">
+                                            <MudIcon Icon="@GetIconFromEstado(traslado.IdEstadoTraslado)"
+                                                     Class="mr-2"
+                                                     Color="@GetColorFromEstado(traslado.IdEstadoTraslado)" />
+                                            <MudText Typo="Typo.subtitle2">Estado</MudText>
+                                        </div>
+                                        <MudChip T="string"
+                                                 Color="@GetColorFromEstado(traslado.IdEstadoTraslado)"
+                                                 Size="Size.Medium"
+                                                 Variant="Variant.Filled">
+                                            @GetEstadoTexto(traslado.IdEstadoTraslado)
+                                        </MudChip>
+                                    </MudPaper>
+                                </MudItem>
+
+                                @if (!string.IsNullOrEmpty(traslado.Observaciones))
+                                {
+                                    <MudItem xs="12">
+                                        <MudPaper Class="pa-3" Elevation="1">
+                                            <div class="d-flex align-center mb-2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Notes" Class="mr-2" Color="Color.Dark" />
+                                                <MudText Typo="Typo.subtitle2">Observaciones</MudText>
+                                            </div>
+                                            <MudText Typo="Typo.body1">@traslado.Observaciones</MudText>
+                                        </MudPaper>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <!-- Estadísticas Rápidas -->
+                <MudItem xs="12" md="4">
+                    <MudCard Elevation="2" Class="mb-4">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Resumen</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                @if (trasladoDetalles?.Any() == true)
+                                {
+                                    <MudItem xs="12">
+                                        <div class="d-flex justify-space-between align-center mb-2">
+                                            <MudText Typo="Typo.subtitle2">Productos:</MudText>
+                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small">
+                                                @trasladoDetalles.Count
+                                            </MudChip>
+                                        </div>
+                                    </MudItem>
+
+                                    <MudItem xs="12">
+                                        <div class="d-flex justify-space-between align-center mb-2">
+                                            <MudText Typo="Typo.subtitle2">Cantidad Total:</MudText>
+                                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">
+                                                @trasladoDetalles.Sum(d => d.Cantidad ?? 0) unidades
+                                            </MudChip>
+                                        </div>
+                                    </MudItem>
+                                }
+
+                                <MudItem xs="12">
+                                    <MudDivider Class="my-2" />
+                                    <div class="d-flex justify-space-between align-center">
+                                        <MudText Typo="Typo.subtitle2">ID Traslado:</MudText>
+                                        <MudText Typo="Typo.body1"><strong>#@traslado.IdTraslado</strong></MudText>
+                                    </div>
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+
+                    <!-- Acciones Rápidas -->
+                    @if (traslado.IdEstadoTraslado == 1 || traslado.IdEstadoTraslado == 2)
+                    {
+                        <MudCard Elevation="2">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">Acciones</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudStack Spacing="2">
+                                    @if (traslado.IdEstadoTraslado == 1) // Pendiente
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   FullWidth="true"
+                                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                                   OnClick="@ProcesarTraslado">
+                                            Procesar Traslado
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Error"
+                                                   FullWidth="true"
+                                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                                   OnClick="@CancelarTraslado">
+                                            Cancelar Traslado
+                                        </MudButton>
+                                    }
+
+                                    @if (traslado.IdEstadoTraslado == 2) // En proceso
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   FullWidth="true"
+                                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   OnClick="@ConfirmarRecepcion">
+                                            Confirmar Recepción
+                                        </MudButton>
+                                    }
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    }
+                </MudItem>
+
+                <!-- Detalles de Productos -->
+                <MudItem xs="12">
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Productos del Traslado</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @if (loadingDetalles)
+                            {
+                                <div class="d-flex justify-center pa-4">
+                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                                    <MudText Class="ml-2">Cargando productos...</MudText>
+                                </div>
+                            }
+                            else if (trasladoDetalles?.Any() == true)
+                            {
+                                <MudDataGrid T="TrasladoDetalle"
+                                             Items="@trasladoDetalles"
+                                             Dense="true"
+                                             Hover="true"
+                                             ReadOnly="true"
+                                             SortMode="SortMode.None">
+                                    <Columns>
+                                        <PropertyColumn Property="x => x.IdProductoNavigation.NombreProducto"
+                                                        Title="Producto" />
+
+                                        <TemplateColumn Title="Categoría">
+                                            <CellTemplate>
+                                                <MudChip T="string"
+                                                         Color="Color.Info"
+                                                         Size="Size.Small"
+                                                         Variant="Variant.Text">
+                                                    @(context.Item.IdProductoNavigation?.IdCategoriaNavigation?.NombreCategoria ?? "N/A")
+                                                </MudChip>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+
+                                        <TemplateColumn Title="Cantidad">
+                                            <CellTemplate>
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Inventory"
+                                                             Size="Size.Small"
+                                                             Class="mr-1" />
+                                                    <MudText Typo="Typo.body1">
+                                                        <strong>@context.Item.Cantidad</strong> unidades
+                                                    </MudText>
+                                                </div>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+
+                                        <TemplateColumn Title="Estado">
+                                            <CellTemplate>
+                                                <MudChip T="string"
+                                                         Color="@GetColorFromEstado(context.Item.IdEstado)"
+                                                         Size="Size.Small">
+                                                    @GetEstadoTexto(context.Item.IdEstado)
+                                                </MudChip>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+
+                                        <TemplateColumn Title="Descripción">
+                                            <CellTemplate>
+                                                @if (!string.IsNullOrEmpty(context.Item.IdProductoNavigation?.DescrpcionProducto))
+                                                {
+                                                    <MudTooltip Text="@context.Item.IdProductoNavigation.DescrpcionProducto">
+                                                        <MudText Typo="Typo.body2"
+                                                                 Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                            @context.Item.IdProductoNavigation.DescrpcionProducto
+                                                        </MudText>
+                                                    </MudTooltip>
+                                                }
+                                                else
+                                                {
+                                                    <MudText Typo="Typo.body2" Color="Color.Secondary">N/A</MudText>
+                                                }
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                    </Columns>
+                                </MudDataGrid>
+                            }
+                            else
+                            {
+                                <MudAlert Severity="Severity.Info" Class="ma-4">
+                                    <MudText>No hay productos asociados a este traslado.</MudText>
+                                </MudAlert>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <!-- Timeline del Traslado -->
+                <MudItem xs="12">
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Historial del Traslado</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudTimeline TimelineOrientation="TimelineOrientation.Vertical">
+                                <MudTimelineItem Color="Color.Success" Icon="@Icons.Material.Filled.Add">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2">Traslado Creado</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            @if (traslado.FechaTraslado.HasValue)
+                                            {
+                                                @traslado.FechaTraslado.Value.ToString("dd/MM/yyyy HH:mm")
+                                            }
+                                        </MudText>
+                                    </div>
+                                </MudTimelineItem>
+
+                                @if (traslado.IdEstadoTraslado >= 2)
+                                {
+                                    <MudTimelineItem Color="Color.Info" Icon="@Icons.Material.Filled.PlayArrow">
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2">Traslado Procesado</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                En proceso de envío
+                                            </MudText>
+                                        </div>
+                                    </MudTimelineItem>
+                                }
+
+                                @if (traslado.IdEstadoTraslado >= 3)
+                                {
+                                    <MudTimelineItem Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2">Traslado Completado</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                Productos recibidos exitosamente
+                                            </MudText>
+                                        </div>
+                                    </MudTimelineItem>
+                                }
+
+                                @if (traslado.IdEstadoTraslado == 4)
+                                {
+                                    <MudTimelineItem Color="Color.Error" Icon="@Icons.Material.Filled.Cancel">
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2">Traslado Cancelado</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                El traslado fue cancelado
+                                            </MudText>
+                                        </div>
+                                    </MudTimelineItem>
+                                }
+                            </MudTimeline>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter] public int IdTraslado { get; set; }
+
+    private Traslado? traslado;
+    private List<TrasladoDetalle> trasladoDetalles = new();
+    private bool loading = true;
+    private bool loadingDetalles = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTraslado();
+    }
+
+    private async Task LoadTraslado()
+    {
+        loading = true;
+        try
+        {
+            traslado = await TrasladoServices.GetByIdAsync(IdTraslado);
+            await LoadTrasladoDetalles();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar traslado: {ex.Message}");
+            Snackbar.Add("Error al cargar el detalle del traslado", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTrasladoDetalles()
+    {
+        loadingDetalles = true;
+        try
+        {
+            trasladoDetalles = await TrasladoServices.GetTrasladoDetallesByTrasladoIdAsync(IdTraslado);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar detalles: {ex.Message}");
+            trasladoDetalles = new List<TrasladoDetalle>();
+        }
+        finally
+        {
+            loadingDetalles = false;
+        }
+    }
+
+    private async Task ProcesarTraslado()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "¿Está seguro de que desea procesar este traslado? Esta acción actualizará los inventarios.",
+            ["ButtonText"] = "Procesar",
+            ["Color"] = Color.Success
+        };
+
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Confirmar Procesamiento", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                var success = await TrasladoServices.UpdateEstadoTrasladoAsync(IdTraslado, 2);
+                if (success)
+                {
+                    Snackbar.Add("Traslado procesado exitosamente", Severity.Success);
+                    await LoadTraslado();
+                }
+                else
+                {
+                    Snackbar.Add("Error al procesar el traslado", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al procesar traslado: {ex.Message}");
+                Snackbar.Add("Error al procesar el traslado", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ConfirmarRecepcion()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "¿Confirma la recepción de este traslado?",
+            ["ButtonText"] = "Confirmar",
+            ["Color"] = Color.Success
+        };
+
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Confirmar Recepción", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                var success = await TrasladoServices.ConfirmarRecepcionTrasladoAsync(IdTraslado);
+                if (success)
+                {
+                    Snackbar.Add("Recepción confirmada exitosamente", Severity.Success);
+                    await LoadTraslado();
+                }
+                else
+                {
+                    Snackbar.Add("Error al confirmar la recepción", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al confirmar recepción: {ex.Message}");
+                Snackbar.Add("Error al confirmar la recepción", Severity.Error);
+            }
+        }
+    }
+
+    private async Task CancelarTraslado()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "¿Está seguro de que desea cancelar este traslado?",
+            ["ButtonText"] = "Cancelar Traslado",
+            ["Color"] = Color.Error
+        };
+
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Cancelar Traslado", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                var success = await TrasladoServices.CancelarTrasladoAsync(IdTraslado, "Cancelado por el usuario");
+                if (success)
+                {
+                    Snackbar.Add("Traslado cancelado exitosamente", Severity.Success);
+                    await LoadTraslado();
+                }
+                else
+                {
+                    Snackbar.Add("Error al cancelar el traslado", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al cancelar traslado: {ex.Message}");
+                Snackbar.Add("Error al cancelar el traslado", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ImprimirTraslado()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.print");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al imprimir: {ex.Message}");
+            Snackbar.Add("Error al imprimir el traslado", Severity.Error);
+        }
+    }
+
+    private Color GetColorFromEstado(int? estadoId)
+    {
+        return estadoId switch
+        {
+            1 => Color.Warning,   // Pendiente
+            2 => Color.Info,      // En proceso
+            3 => Color.Success,   // Completado
+            4 => Color.Error,     // Cancelado
+            _ => Color.Default
+        };
+    }
+
+    private Severity GetSeverityFromEstado(int? estadoId)
+    {
+        return estadoId switch
+        {
+            1 => Severity.Warning,
+            2 => Severity.Info,
+            3 => Severity.Success,
+            4 => Severity.Error,
+            _ => Severity.Normal
+        };
+    }
+
+    private string GetIconFromEstado(int? estadoId)
+    {
+        return estadoId switch
+        {
+            1 => Icons.Material.Filled.Pending,
+            2 => Icons.Material.Filled.LocalShipping,
+            3 => Icons.Material.Filled.CheckCircle,
+            4 => Icons.Material.Filled.Cancel,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+
+    private string GetEstadoTexto(int? estadoId)
+    {
+        return estadoId switch
+        {
+            1 => "Pendiente",
+            2 => "En Proceso",
+            3 => "Completado",
+            4 => "Cancelado",
+            _ => "Desconocido"
+        };
+    }
+}

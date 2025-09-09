@@ -1,0 +1,644 @@
+﻿@page "/apertura-caja"
+@page "/apertura-caja/historial/{IdCaja:int?}"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.AperturaCajaServices
+@using ProyectoFarmaVita.Services.CajaServices
+@using MudBlazor
+
+@inject IAperturaCajaService AperturaCajaService
+@inject ICajaService CajaService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">
+    @if (IdCaja.HasValue)
+    {
+        <text>Historial de Apertura - @(cajaSeleccionada?.NombreCaja ?? "Caja")</text>
+    }
+    else
+    {
+        <text>Historial de Aperturas de Caja</text>
+    }
+</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">
+        Historial de Aperturas de Caja
+    </MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="4">
+            <MudTextField T="string" Label="Buscar"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search" />
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudDatePicker Label="Fecha Desde"
+                           @bind-Date="fechaDesde"
+                           @bind-Date:after="OnFechaChanged"
+                           Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudDatePicker Label="Fecha Hasta"
+                           @bind-Date="fechaHasta"
+                           @bind-Date:after="OnFechaChanged"
+                           Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    {
+        <MudAlert Severity="Severity.Info">No se encontraron registros de apertura de caja.</MudAlert>
+    }
+    else
+    {
+        <MudTable T="AperturaCaja"
+                  ServerData="ServerReload"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Caja</MudTh>
+                <MudTh>Sucursal</MudTh>
+                <MudTh>Responsable</MudTh>
+                <MudTh>Fecha Apertura</MudTh>
+                <MudTh>Monto Apertura</MudTh>
+                <MudTh>Fecha Cierre</MudTh>
+                <MudTh>Monto Cierre</MudTh>
+                <MudTh>Diferencia</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.IdAperturaCaja</MudTd>
+                <MudTd DataLabel="Caja">@(context.IdCajaNavigation?.NombreCaja ?? "N/A")</MudTd>
+                <MudTd DataLabel="Sucursal">@(context.IdCajaNavigation?.IdSucursalNavigation?.NombreSucursal ?? "N/A")</MudTd>
+                <MudTd DataLabel="Responsable">
+                    @if (context.IdPersonaNavigation != null)
+                    {
+                        <text>@($"{context.IdPersonaNavigation.Nombre} {context.IdPersonaNavigation.Apellido}")</text>
+                    }
+                    else
+                    {
+                        <text>N/A</text>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Fecha Apertura">@(context.FechaApertura?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudTd>
+                <MudTd DataLabel="Monto Apertura">@(context.MontoApertura?.ToString("C") ?? "N/A")</MudTd>
+                <MudTd DataLabel="Fecha Cierre">@(context.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudTd>
+                <MudTd DataLabel="Monto Cierre">@(context.MontoCierre?.ToString("C") ?? "N/A")</MudTd>
+                <MudTd DataLabel="Diferencia">
+                    @if (context.MontoCierre.HasValue && context.MontoApertura.HasValue)
+                    {
+                        var diferencia = context.MontoCierre.Value - context.MontoApertura.Value;
+                        @if (diferencia > 0)
+                        {
+                            <MudText Color="Color.Success">+@diferencia.ToString("C")</MudText>
+                        }
+                        else if (diferencia < 0)
+                        {
+                            <MudText Color="Color.Error">@diferencia.ToString("C")</MudText>
+                        }
+                        else
+                        {
+                            <MudText>@diferencia.ToString("C")</MudText>
+                        }
+                    }
+                    else
+                    {
+                        <text>N/A</text>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    @if (context.Activa == true)
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small">Abierta</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small">Cerrada</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-grid gap-2 d-md-block">
+                        <MudButton Size="Size.Small"
+                                   Color="Color.Info"
+                                   Variant="Variant.Text"
+                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                   OnClick="@(() => VerDetalle(context.IdAperturaCaja))">
+                            Ver Detalle
+                        </MudButton>
+
+                        @if (context.Activa == true)
+                        {
+                            <MudButton Size="Size.Small"
+                                       Color="Color.Error"
+                                       Variant="Variant.Filled"
+                                       StartIcon="@Icons.Material.Filled.Close"
+                                       OnClick="@(() => CerrarCaja(context.IdAperturaCaja))">
+                                Cerrar
+                            </MudButton>
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Aperturas por página:"
+                               InfoFormat="@infoFormat"
+                               PageSizeOptions="new int[] { 20, 25, 30, 40, int.MaxValue }"
+                               OnPageChanged="LoadPage"
+                               Class="acciones" />
+            </PagerContent>
+        </MudTable>
+    }
+
+    @if (!IdCaja.HasValue)
+    {
+        <div class="mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/caja"))">
+                Regresar a Cajas
+            </MudButton>
+        </div>
+    }
+</MudPaper>
+
+<!-- Dialog para cerrar caja -->
+<MudDialog @bind-IsVisible="showCerrarDialog" Options="dialogOptions">
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-4">Cerrar Caja</MudText>
+
+        @if (aperturaSeleccionada != null)
+        {
+            <MudGrid>
+                <MudItem xs="6">
+                    <MudText><strong>Caja:</strong> @(aperturaSeleccionada.IdCajaNavigation?.NombreCaja ?? "N/A")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText>
+                        <strong>Responsable:</strong>
+                        @if (aperturaSeleccionada.IdPersonaNavigation != null)
+                        {
+                            <text>@($"{aperturaSeleccionada.IdPersonaNavigation.Nombre} {aperturaSeleccionada.IdPersonaNavigation.Apellido}")</text>
+                        }
+                        else
+                        {
+                            <text>N/A</text>
+                        }
+                    </MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText><strong>Fecha Apertura:</strong> @(aperturaSeleccionada.FechaApertura?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText><strong>Monto Apertura:</strong> @(aperturaSeleccionada.MontoApertura?.ToString("C") ?? "N/A")</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+        }
+
+        <MudTextField T="double"
+                      @bind-Value="montoCierre"
+                      @bind-Value:after="OnMontoCierreChanged"
+                      Label="Monto Final"
+                      Variant="Variant.Outlined"
+                      Format="F2"
+                      InputType="InputType.Number"
+                      Class="mb-3"
+                      Required="true"
+                      HelperText="Ingrese el monto final en efectivo" />
+
+        <MudTextField T="string"
+                      @bind-Value="observacionesCierre"
+                      Label="Observaciones (Opcional)"
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      MaxLength="150"
+                      Class="mb-3"
+                      HelperText="Máximo 150 caracteres" />
+
+        @if (diferenciaMonto != 0 && aperturaSeleccionada != null)
+        {
+            <MudAlert Severity="@(diferenciaMonto > 0 ? Severity.Info : Severity.Warning)" Class="mb-3">
+                @if (diferenciaMonto > 0)
+                {
+                    <text>Sobrante: @diferenciaMonto.ToString("C")</text>
+                }
+                else
+                {
+                    <text>Faltante: @Math.Abs(diferenciaMonto).ToString("C")</text>
+                }
+            </MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="CancelarCierre" Color="Color.Default">Cancelar</MudButton>
+        <MudButton OnClick="ConfirmarCierre" Color="Color.Primary" Variant="Variant.Filled">Cerrar Caja</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Dialog para ver detalle -->
+<MudDialog @bind-IsVisible="showDetalleDialog" Options="detalleDialogOptions">
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-4">Detalle de Apertura de Caja</MudText>
+
+        @if (aperturaDetalle != null)
+        {
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Class="mb-2">Información General</MudText>
+                            <MudText><strong>ID Apertura:</strong> @aperturaDetalle.IdAperturaCaja</MudText>
+                            <MudText><strong>Caja:</strong> @(aperturaDetalle.IdCajaNavigation?.NombreCaja ?? "N/A")</MudText>
+                            <MudText><strong>Sucursal:</strong> @(aperturaDetalle.IdCajaNavigation?.IdSucursalNavigation?.NombreSucursal ?? "N/A")</MudText>
+                            <MudText>
+                                <strong>Responsable:</strong>
+                                @if (aperturaDetalle.IdPersonaNavigation != null)
+                                {
+                                    <text>@($"{aperturaDetalle.IdPersonaNavigation.Nombre} {aperturaDetalle.IdPersonaNavigation.Apellido}")</text>
+                                }
+                                else
+                                {
+                                    <text>N/A</text>
+                                }
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Class="mb-2">Información Financiera</MudText>
+                            <MudText><strong>Fecha Apertura:</strong> @(aperturaDetalle.FechaApertura?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudText>
+                            <MudText><strong>Monto Apertura:</strong> @(aperturaDetalle.MontoApertura?.ToString("C") ?? "N/A")</MudText>
+                            @if (aperturaDetalle.FechaCierre.HasValue)
+                            {
+                                <MudText><strong>Fecha Cierre:</strong> @(aperturaDetalle.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudText>
+                                <MudText><strong>Monto Cierre:</strong> @(aperturaDetalle.MontoCierre?.ToString("C") ?? "N/A")</MudText>
+
+                                @if (aperturaDetalle.MontoCierre.HasValue && aperturaDetalle.MontoApertura.HasValue)
+                                {
+                                    var diferencia = aperturaDetalle.MontoCierre.Value - aperturaDetalle.MontoApertura.Value;
+                                    <MudText>
+                                        <strong>Diferencia:</strong>
+                                        @if (diferencia > 0)
+                                        {
+                                            <span style="color: green;">+@diferencia.ToString("C")</span>
+                                        }
+                                        else if (diferencia < 0)
+                                        {
+                                            <span style="color: red;">@diferencia.ToString("C")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@diferencia.ToString("C")</span>
+                                        }
+                                    </MudText>
+                                }
+                            }
+                            else
+                            {
+                                <MudText><strong>Estado:</strong> <span style="color: green;">Abierta</span></MudText>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(aperturaDetalle.Observaciones))
+                {
+                    <MudItem xs="12">
+                        <MudCard>
+                            <MudCardContent>
+                                <MudText Typo="Typo.h6" Class="mb-2">Observaciones</MudText>
+                                <MudText>@aperturaDetalle.Observaciones</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+
+                @if (aperturaDetalle.Factura?.Any() == true)
+                {
+                    <MudItem xs="12">
+                        <MudCard>
+                            <MudCardContent>
+                                <MudText Typo="Typo.h6" Class="mb-2">Facturas (@aperturaDetalle.Factura.Count)</MudText>
+                                <MudText><strong>Total en Facturas:</strong> @aperturaDetalle.Factura.Sum(f => f.Total ?? 0).ToString("C")</MudText>
+
+                                <MudDivider Class="my-3" />
+
+                                <MudTable T="Factura" Items="@aperturaDetalle.Factura" Dense="true" Hover="true">
+                                    <HeaderContent>
+                                        <MudTh>Número</MudTh>
+                                        <MudTh>Fecha</MudTh>
+                                        <MudTh>Total</MudTh>
+                                        <MudTh>Estado</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Número">@(context.NumeroFactura?.ToString() ?? "N/A")</MudTd>
+                                        <MudTd DataLabel="Fecha">@(context.FechaVenta?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</MudTd>
+                                        <MudTd DataLabel="Total">@(context.Total?.ToString("C") ?? "N/A")</MudTd>
+                                        <MudTd DataLabel="Estado">@(context.IdEstadoNavigation?.Estado1 ?? "N/A")</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="CerrarDetalle" Color="Color.Primary">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public int? IdCaja { get; set; }
+
+    private MPaginatedResult<AperturaCaja> paginatedResult;
+    private bool isLoading = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private DialogOptions dialogOptions = new() { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+    private DialogOptions detalleDialogOptions = new() { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+    private const int PageSize = 25;
+    private string searchArea = "";
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private Caja? cajaSeleccionada;
+
+    // Variables para cerrar caja
+    private bool showCerrarDialog = false;
+    private AperturaCaja? aperturaSeleccionada;
+    private double montoCierre = 0;
+    private string observacionesCierre = "";
+    private double diferenciaMonto = 0;
+
+    // Variables para ver detalle
+    private bool showDetalleDialog = false;
+    private AperturaCaja? aperturaDetalle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IdCaja.HasValue)
+        {
+            try
+            {
+                cajaSeleccionada = await CajaService.GetByIdAsync(IdCaja.Value);
+                if (cajaSeleccionada == null)
+                {
+                    Snackbar.Add("La caja especificada no existe", Severity.Error);
+                    NavigationManager.NavigateTo("/caja");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al cargar la caja: {ex.Message}", Severity.Error);
+                NavigationManager.NavigateTo("/caja");
+                return;
+            }
+        }
+
+        await LoadPage(1);
+    }
+
+    private async Task LoadPage(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            List<AperturaCaja> aperturas;
+
+            if (IdCaja.HasValue)
+            {
+                aperturas = await AperturaCajaService.GetByCajaAsync(IdCaja.Value);
+            }
+            else if (fechaDesde.HasValue && fechaHasta.HasValue)
+            {
+                aperturas = await AperturaCajaService.GetByRangoFechasAsync(fechaDesde.Value, fechaHasta.Value);
+            }
+            else if (fechaDesde.HasValue)
+            {
+                aperturas = await AperturaCajaService.GetByFechaAsync(fechaDesde.Value);
+            }
+            else
+            {
+                aperturas = await AperturaCajaService.GetAllAsync();
+            }
+
+            // Filtrar por término de búsqueda si existe
+            if (!string.IsNullOrEmpty(searchArea))
+            {
+                aperturas = aperturas.Where(a =>
+                    (a.IdCajaNavigation?.NombreCaja?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (a.IdPersonaNavigation?.Nombre?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (a.IdPersonaNavigation?.Apellido?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (a.Observaciones?.Contains(searchArea, StringComparison.OrdinalIgnoreCase) == true)
+                ).ToList();
+            }
+
+            // Ordenar por fecha de apertura descendente
+            aperturas = aperturas.OrderByDescending(a => a.FechaApertura).ToList();
+
+            // Simular paginación
+            var totalItems = aperturas.Count;
+            var items = aperturas
+                .Skip((page - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+
+            paginatedResult = new MPaginatedResult<AperturaCaja>
+            {
+                Items = items,
+                TotalCount = totalItems,
+                PageNumber = page,
+                PageSize = PageSize
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar datos: {ex.Message}", Severity.Error);
+            paginatedResult = new MPaginatedResult<AperturaCaja>
+            {
+                Items = new List<AperturaCaja>(),
+                TotalCount = 0,
+                PageNumber = page,
+                PageSize = PageSize
+            };
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<TableData<AperturaCaja>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        await LoadPage(state.Page + 1);
+
+        return new TableData<AperturaCaja>
+        {
+            Items = paginatedResult?.Items ?? new List<AperturaCaja>(),
+            TotalItems = paginatedResult?.TotalCount ?? 0
+        };
+    }
+
+    private async Task Search()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task OnFechaChanged()
+    {
+        await LoadPage(1);
+    }
+
+    // Métodos para cerrar caja
+    private async Task CerrarCaja(int idApertura)
+    {
+        try
+        {
+            aperturaSeleccionada = await AperturaCajaService.GetByIdAsync(idApertura);
+
+            if (aperturaSeleccionada == null)
+            {
+                Snackbar.Add("No se encontró la apertura de caja", Severity.Error);
+                return;
+            }
+
+            if (aperturaSeleccionada.Activa != true)
+            {
+                Snackbar.Add("Esta caja ya está cerrada", Severity.Warning);
+                return;
+            }
+
+            montoCierre = 0;
+            observacionesCierre = "";
+            diferenciaMonto = 0;
+            showCerrarDialog = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar apertura: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CancelarCierre()
+    {
+        showCerrarDialog = false;
+        aperturaSeleccionada = null;
+        montoCierre = 0;
+        observacionesCierre = "";
+        diferenciaMonto = 0;
+    }
+
+    private async Task ConfirmarCierre()
+    {
+        try
+        {
+            if (aperturaSeleccionada == null)
+            {
+                Snackbar.Add("Error: No se ha seleccionado ninguna apertura", Severity.Error);
+                return;
+            }
+
+            // Validar longitud de observaciones
+            if (!string.IsNullOrEmpty(observacionesCierre) && observacionesCierre.Length > 150)
+            {
+                Snackbar.Add("Las observaciones no pueden exceder 150 caracteres", Severity.Error);
+                return;
+            }
+
+            var resultado = await AperturaCajaService.CerrarCajaAsync(
+                aperturaSeleccionada.IdAperturaCaja,
+                montoCierre,
+                observacionesCierre);
+
+            if (resultado)
+            {
+                Snackbar.Add("Caja cerrada correctamente", Severity.Success);
+                CancelarCierre();
+                await LoadPage(1); // Recargar la tabla
+            }
+            else
+            {
+                Snackbar.Add("Error al cerrar la caja", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnMontoCierreChanged()
+    {
+        if (aperturaSeleccionada?.MontoApertura.HasValue == true)
+        {
+            diferenciaMonto = montoCierre - aperturaSeleccionada.MontoApertura.Value;
+        }
+        StateHasChanged();
+    }
+
+    // Métodos para ver detalle
+    private async Task VerDetalle(int idApertura)
+    {
+        try
+        {
+            aperturaDetalle = await AperturaCajaService.GetByIdAsync(idApertura);
+
+            if (aperturaDetalle == null)
+            {
+                Snackbar.Add("No se encontró la apertura de caja", Severity.Error);
+                return;
+            }
+
+            showDetalleDialog = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar detalle: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CerrarDetalle()
+    {
+        showDetalleDialog = false;
+        aperturaDetalle = null;
+    }
+}

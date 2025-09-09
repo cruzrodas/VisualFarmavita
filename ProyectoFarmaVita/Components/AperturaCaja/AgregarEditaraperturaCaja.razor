@@ -1,0 +1,209 @@
+﻿@page "/aperturacaja/agregar"
+@page "/aperturacaja/agregar/{IdAperturaCaja:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.AperturaCajaServices
+@using ProyectoFarmaVita.Services.CajaServices
+@using ProyectoFarmaVita.Services.PersonaServices
+@using MudBlazor
+
+@implements IDisposable
+
+@inject IAperturaCajaService AperturaCajaService
+@inject ICajaService CajaService
+@inject IPersonaService PersonaService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">@(IdAperturaCaja.HasValue ? "Editar Apertura de Caja" : "Nueva Apertura de Caja")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdAperturaCaja.HasValue ? "Editar Apertura de Caja" : "Agregar Nueva Apertura de Caja")
+    </MudText>
+
+    <EditForm Model="aperturaCaja" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Caja"
+                           @bind-Value="aperturaCaja.IdCaja"
+                           For="@(() => aperturaCaja.IdCaja)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar una caja">
+                    @foreach (var caja in cajasDisponibles)
+                    {
+                        <MudSelectItem T="int?" Value="@caja.IdCaja">
+                            @caja.NombreCaja - @caja.IdSucursalNavigation?.NombreSucursal
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Responsable"
+                           @bind-Value="aperturaCaja.IdPersona"
+                           For="@(() => aperturaCaja.IdPersona)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar un responsable">
+                    @foreach (var persona in personasDisponibles)
+                    {
+                        <MudSelectItem T="int?" Value="@persona.IdPersona">
+                            @persona.Nombre @persona.Apellido
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudNumericField T="double?"
+                                 Label="Monto de Apertura"
+                                 @bind-Value="aperturaCaja.MontoApertura"
+                                 For="@(() => aperturaCaja.MontoApertura)"
+                                 Variant="Variant.Outlined"
+                                 Required="true"
+                                 RequiredError="El monto de apertura es requerido"
+                                 Min="0"
+                                 Step="0.01"
+                                 Format="C"
+                                 Culture="@System.Globalization.CultureInfo.GetCultureInfo("es-GT")" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField T="string"
+                              Label="Observaciones"
+                              @bind-Value="aperturaCaja.Observaciones"
+                              For="@(() => aperturaCaja.Observaciones)"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              MaxLength="500"
+                              Counter="500"
+                              Immediate="true" />
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-content-between mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/aperturacaja"))">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@isSubmitting">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdAperturaCaja.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdAperturaCaja { get; set; }
+
+    private AperturaCaja aperturaCaja = new AperturaCaja();
+    private bool isSubmitting = false;
+    private List<Caja> cajasDisponibles = new();
+    private List<Persona> personasDisponibles = new();
+    private bool _disposed = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+
+        if (IdAperturaCaja.HasValue)
+        {
+            try
+            {
+                aperturaCaja = await AperturaCajaService.GetByIdAsync(IdAperturaCaja.Value);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al cargar la apertura de caja: {ex.Message}", Severity.Error);
+                NavigationManager.NavigateTo("/aperturacaja");
+            }
+        }
+        else
+        {
+            aperturaCaja = new AperturaCaja();
+        }
+    }
+
+    private async Task CargarDatos()
+    {
+        try
+        {
+            // Cajas activas
+            var todasCajas = await CajaService.GetAllAsync();
+            cajasDisponibles = todasCajas?.Where(c => c.Activa == true).ToList() ?? new List<Caja>();
+
+            // Personas disponibles
+            var todasPersonas = await PersonaService.GetAllAsync();
+            personasDisponibles = todasPersonas?.ToList() ?? new List<Persona>();
+
+            if (!_disposed)
+                StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar los datos: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        if (!_disposed) StateHasChanged();
+
+        try
+        {
+            var result = await AperturaCajaService.AddUpdateAsync(aperturaCaja);
+
+            if (!_disposed)
+            {
+                if (result)
+                {
+                    var message = IdAperturaCaja.HasValue ? "Apertura de caja actualizada correctamente" : "Apertura de caja creada correctamente";
+                    Snackbar.Add(message, Severity.Success);
+                    NavigationManager.NavigateTo("/aperturacaja");
+                }
+                else
+                {
+                    Snackbar.Add("Error al guardar la apertura de caja", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!_disposed)
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            if (!_disposed) StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+    }
+}

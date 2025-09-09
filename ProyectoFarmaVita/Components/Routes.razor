@@ -1,5 +1,6 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(Program).Assembly">
@@ -8,77 +9,136 @@
                 <NotAuthorized>
                     <AuthorizeView>
                         <Authorized Context="authUser">
-                            <!-- Usuario autenticado pero sin permisos para esta página específica -->
-                            <div class="access-denied-container">
-                                <div class="access-denied-content">
-                                    <i class="fas fa-lock access-denied-icon"></i>
-                                    <h1>Acceso Denegado</h1>
-                                    <p>No tienes permisos para acceder a esta página del sistema FarmaVita.</p>
-                                    <p>Tu rol actual no te permite ver este contenido.</p>
-                                    <MudButton Variant="Variant.Filled"
-                                               Color="Color.Primary"
-                                               Href="/"
-                                               StartIcon="@Icons.Material.Filled.Home"
-                                               Class="mt-3">
-                                        Volver al inicio
-                                    </MudButton>
-                                </div>
-                            </div>
+                            <AccessDeniedComponent />
                         </Authorized>
                         <NotAuthorized Context="anonUser">
-                            @* Usuario no autenticado - redirigir automáticamente *@
-                            @{
-                                Navigation.NavigateTo("/login", true);
+                            @if (!_isLoginPage)
+                            {
+                                <LoadingComponent Message="Redirigiendo al login..." />
                             }
-
-                            <div class="loading-container">
-                                <div class="loading-content">
-                                    <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
-                                    <MudImage Src="images/Logo FarmaVita.png"
-                                              Width="120"
-                                              Height="120"
-                                              Alt="FarmaVita Logo"
-                                              Class="mt-4 pulse-img" />
-                                    <p class="mt-3">Redirigiendo al login...</p>
-                                </div>
-                            </div>
                         </NotAuthorized>
                     </AuthorizeView>
                 </NotAuthorized>
                 <Authorizing>
-                    <div class="loading-container">
-                        <div class="loading-content">
-                            <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
-                            <MudImage Src="images/Logo FarmaVita.png"
-                                      Width="120"
-                                      Height="120"
-                                      Alt="FarmaVita Logo"
-                                      Class="mt-4 pulse-img" />
-                            <p class="mt-3">Verificando permisos...</p>
-                        </div>
-                    </div>
+                    <LoadingComponent Message="Verificando permisos..." />
                 </Authorizing>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
             <LayoutView Layout="@typeof(Layout.MainLayout)">
-                <div class="not-found-container">
-                    <div class="not-found-content">
-                        <i class="fas fa-capsules not-found-icon"></i>
-                        <h1>404 - Página no encontrada</h1>
-                        <p>Lo sentimos, la página que buscas no existe en el sistema FarmaVita.</p>
-                        <p>Verifica la URL o navega desde el menú principal.</p>
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   Href="/"
-                                   StartIcon="@Icons.Material.Filled.Home"
-                                   Class="mt-3">
-                            Volver al inicio
-                        </MudButton>
-                    </div>
-                </div>
+                <NotFoundComponent />
             </LayoutView>
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    private bool _isLoginPage;
+    private bool _hasNavigated;
+
+    protected override void OnInitialized()
+    {
+        // Calcular una sola vez si estamos en la página de login
+        _isLoginPage = IsLoginPage();
+        
+        // Solo suscribirse a cambios de ubicación si no estamos en login
+        if (!_isLoginPage)
+        {
+            Navigation.LocationChanged += OnLocationChanged;
+        }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Optimización: solo redirigir una vez y si no estamos en login
+        if (firstRender && !_hasNavigated && !_isLoginPage)
+        {
+            _hasNavigated = true;
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+
+    private bool IsLoginPage()
+    {
+        var currentPath = Navigation.ToBaseRelativePath(Navigation.Uri);
+        return currentPath.StartsWith("login", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _isLoginPage = IsLoginPage();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
+
+@* Componente reutilizable para loading *@
+<div style="display: none;">
+    <LoadingComponent />
+    <AccessDeniedComponent />
+    <NotFoundComponent />
+</div>
+
+@code
+{
+    // Componentes inline optimizados
+    private static RenderFragment LoadingComponent(string message = "Cargando...") => __builder =>
+    {
+        <div class="loading-container">
+            <div class="loading-content">
+                <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
+                <MudImage Src="images/Logo FarmaVita.png"
+                          Width="120"
+                          Height="120"
+                          Alt="FarmaVita Logo"
+                          ObjectFit="ObjectFit.Contain"
+                          Loading="Loading.Lazy"
+                          Class="mt-4 pulse-img" />
+                <p class="mt-3">@message</p>
+            </div>
+        </div>
+    };
+
+    private static RenderFragment AccessDeniedComponent => __builder =>
+    {
+        <div class="access-denied-container">
+            <div class="access-denied-content">
+                <i class="fas fa-lock access-denied-icon" aria-label="Acceso denegado"></i>
+                <h1>Acceso Denegado</h1>
+                <p>No tienes permisos para acceder a esta página del sistema FarmaVita.</p>
+                <p>Tu rol actual no te permite ver este contenido.</p>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Href="/"
+                           StartIcon="@Icons.Material.Filled.Home"
+                           Class="mt-3">
+                    Volver al inicio
+                </MudButton>
+            </div>
+        </div>
+    };
+
+    private static RenderFragment NotFoundComponent => __builder =>
+    {
+        <div class="not-found-container">
+            <div class="not-found-content">
+                <i class="fas fa-capsules not-found-icon" aria-label="Página no encontrada"></i>
+                <h1>404 - Página no encontrada</h1>
+                <p>Lo sentimos, la página que buscas no existe en el sistema FarmaVita.</p>
+                <p>Verifica la URL o navega desde el menú principal.</p>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Href="/"
+                           StartIcon="@Icons.Material.Filled.Home"
+                           Class="mt-3">
+                    Volver al inicio
+                </MudButton>
+            </div>
+        </div>
+    };
+}

@@ -1,0 +1,213 @@
+﻿@page "/caja/agregar"
+@page "/caja/agregar/{IdCaja:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.CajaServices
+@using ProyectoFarmaVita.Services.SucursalServices
+@using MudBlazor
+
+@inject ICajaService CajaService
+@inject ISucursalService SucursalService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<h3 style="margin-bottom: 20px;">@(IdCaja.HasValue ? "Editar Caja" : "Nueva Caja")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdCaja.HasValue ? "Editar Caja" : "Agregar Nueva Caja")
+    </MudText>
+
+    <EditForm Model="caja" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Nombre de la Caja"
+                              @bind-Value="caja.NombreCaja"
+                              For="@(() => caja.NombreCaja)"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="El nombre de la caja es requerido"
+                              MaxLength="50"
+                              Counter="50"
+                              Immediate="true" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Sucursal"
+                           @bind-Value="caja.IdSucursal"
+                           For="@(() => caja.IdSucursal)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar una sucursal">
+                    @if (sucursales != null)
+                    {
+                        @foreach (var sucursal in sucursales)
+                        {
+                            <MudSelectItem Value="@((int?)sucursal.IdSucursal)">
+                                @sucursal.NombreSucursal
+                            </MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+
+            @if (IdCaja.HasValue)
+            {
+                <MudItem xs="12" md="6">
+                    <MudSwitch T="bool"
+                               @bind-Checked="caja.Activa"
+                               Label="Caja Activa"
+                               Color="Color.Primary"
+                               ThumbIcon="@(caja.Activa == true ? Icons.Material.Filled.Check : Icons.Material.Filled.Close)"
+                               ThumbIconColor="@(caja.Activa == true ? Color.Success : Color.Error)" />
+                </MudItem>
+            }
+        </MudGrid>
+
+        @if (IdCaja.HasValue && caja.AperturaCaja?.Any() == true)
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.h6" Class="mb-3">Historial de Aperturas Recientes</MudText>
+
+            <MudTable T="AperturaCaja" Items="@caja.AperturaCaja.OrderByDescending(a => a.FechaApertura).Take(5)" Dense="true" Hover="true" ReadOnly="true">
+                <HeaderContent>
+                    <MudTh>Fecha Apertura</MudTh>
+                    <MudTh>Responsable</MudTh>
+                    <MudTh>Monto Apertura</MudTh>
+                    <MudTh>Monto Cierre</MudTh>
+                    <MudTh>Estado</MudTh>
+                </HeaderContent>
+                <RowTemplate Context="apertura">
+                    <MudTd DataLabel="Fecha">@apertura.FechaApertura?.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="Responsable">@($"{apertura.IdPersonaNavigation?.Nombre} {apertura.IdPersonaNavigation?.Apellido}")</MudTd>
+                    <MudTd DataLabel="Apertura">@apertura.MontoApertura?.ToString("C")</MudTd>
+                    <MudTd DataLabel="Cierre">@(apertura.MontoCierre?.ToString("C") ?? "N/A")</MudTd>
+                    <MudTd DataLabel="Estado">
+                        @if (apertura.Activa == true)
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Abierta</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Default" Size="Size.Small">Cerrada</MudChip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+
+        <div class="d-flex justify-space-between mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/caja"))">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@isSubmitting">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdCaja.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdCaja { get; set; }
+
+    private Caja caja = new Caja();
+    private List<Sucursal> sucursales = new List<Sucursal>();
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSucursales();
+
+        if (IdCaja.HasValue)
+        {
+            try
+            {
+                caja = await CajaService.GetByIdAsync(IdCaja.Value);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al cargar la caja: {ex.Message}", Severity.Error);
+                NavigationManager.NavigateTo("/caja");
+            }
+        }
+        else
+        {
+            caja = new Caja { Activa = true };
+        }
+    }
+
+    private async Task LoadSucursales()
+    {
+        try
+        {
+            sucursales = await SucursalService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar sucursales: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validar que no exista otra caja con el mismo nombre en la misma sucursal
+            if (!IdCaja.HasValue || caja.NombreCaja != (await CajaService.GetByIdAsync(IdCaja.Value)).NombreCaja)
+            {
+                var existeNombre = await CajaService.ExistsByNombreAsync(caja.NombreCaja, IdCaja);
+                if (existeNombre)
+                {
+                    Snackbar.Add("Ya existe una caja con este nombre", Severity.Error);
+                    return;
+                }
+            }
+
+            var result = await CajaService.AddUpdateAsync(caja);
+
+            if (result)
+            {
+                var message = IdCaja.HasValue ? "Caja actualizada correctamente" : "Caja creada correctamente";
+                Snackbar.Add(message, Severity.Success);
+                NavigationManager.NavigateTo("/caja");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar la caja", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}
