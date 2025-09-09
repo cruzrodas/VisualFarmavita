@@ -115,49 +115,6 @@
                     </MudExpansionPanel>
                 </MudExpansionPanels>
             </MudItem>
-
-            <!-- Statistics Cards -->
-            <MudItem xs="12">
-                <MudGrid Class="mb-4">
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudCard Elevation="2">
-                            <MudCardContent Class="text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" />
-                                <MudText Typo="Typo.h5">@totalTraslados</MudText>
-                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Traslados</MudText>
-                            </MudCardContent>
-                        </MudCard>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudCard Elevation="2">
-                            <MudCardContent Class="text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Pending" Size="Size.Large" Color="Color.Warning" />
-                                <MudText Typo="Typo.h5">@trasladosPendientes</MudText>
-                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Pendientes</MudText>
-                            </MudCardContent>
-                        </MudCard>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudCard Elevation="2">
-                            <MudCardContent Class="text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
-                                <MudText Typo="Typo.h5">@trasladosCompletados</MudText>
-                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Completados</MudText>
-                            </MudCardContent>
-                        </MudCard>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudCard Elevation="2">
-                            <MudCardContent Class="text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Large" Color="Color.Error" />
-                                <MudText Typo="Typo.h5">@trasladosCancelados</MudText>
-                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Cancelados</MudText>
-                            </MudCardContent>
-                        </MudCard>
-                    </MudItem>
-                </MudGrid>
-            </MudItem>
-
             <!-- Data Table -->
             <MudItem xs="12">
                 <MudDataGrid T="Traslado"
