@@ -1,0 +1,464 @@
+﻿@page "/apertura-caja/agregar"
+@page "/apertura-caja/agregar/{IdAperturaCaja:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.AperturaCajaServices
+@using ProyectoFarmaVita.Services.CajaServices
+@using ProyectoFarmaVita.Services.PersonaServices
+@using MudBlazor
+@using System.ComponentModel.DataAnnotations
+
+@inject IAperturaCajaService AperturaCajaServices
+@inject ICajaService CajaServices
+@inject IPersonaService PersonaServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<h3 style="margin-bottom: 20px;">@(IdAperturaCaja.HasValue ? "Editar Apertura de Caja" : "Nueva Apertura de Caja")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdAperturaCaja.HasValue ? "Editar Apertura de Caja" : "Agregar Nueva Apertura de Caja")
+    </MudText>
+
+    <EditForm Model="aperturaForm" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <!-- Información básica de la apertura -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">Información de la Apertura</MudText>
+                <MudDivider />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Caja"
+                           @bind-Value="aperturaForm.IdCaja"
+                           For="@(() => aperturaForm.IdCaja)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar una caja"
+                           Disabled="@(IdAperturaCaja.HasValue)">
+                    @if (cajasDisponibles != null)
+                    {
+                        @foreach (var caja in cajasDisponibles)
+                        {
+                            <MudSelectItem T="int?" Value="@caja.IdCaja">
+                                @($"{caja.NombreCaja} - {caja.IdSucursalNavigation?.NombreSucursal}")
+                            </MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Persona Responsable"
+                           @bind-Value="aperturaForm.IdPersona"
+                           For="@(() => aperturaForm.IdPersona)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar una persona responsable">
+                    @if (personas != null)
+                    {
+                        @foreach (var persona in personas)
+                        {
+                            <MudSelectItem T="int?" Value="@persona.IdPersona">
+                                @($"{persona.Nombre} {persona.Apellido}")
+                            </MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudNumericField T="double?"
+                                 Label="Monto de Apertura"
+                                 @bind-Value="aperturaForm.MontoApertura"
+                                 For="@(() => aperturaForm.MontoApertura)"
+                                 Variant="Variant.Outlined"
+                                 Format="F2"
+                                 Adornment="Adornment.Start"
+                                 AdornmentText="Q"
+                                 Min="0"
+                                 Required="true"
+                                 RequiredError="El monto de apertura es requerido" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudDatePicker Label="Fecha de Apertura"
+                               @bind-Date="fechaAperturaDateTime"
+                               Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy"
+                               Mask="@(new DateMask("dd/MM/yyyy"))"
+                               MaxDate="DateTime.Today"
+                               Required="true"
+                               RequiredError="La fecha de apertura es requerida"
+                               ReadOnly="@IdAperturaCaja.HasValue" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Observaciones"
+                              @bind-Value="aperturaForm.Observaciones"
+                              For="@(() => aperturaForm.Observaciones)"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              MaxLength="250"
+                              Counter="250"
+                              HelperText="Observaciones sobre la apertura de caja" />
+            </MudItem>
+
+            <!-- Información de cierre (solo si existe) -->
+            @if (IdAperturaCaja.HasValue && aperturaCaja.FechaCierre.HasValue)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Información de Cierre</MudText>
+                    <MudDivider />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Fecha de Cierre"
+                                  Value="@aperturaCaja.FechaCierre.Value.ToString("dd/MM/yyyy HH:mm")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Monto de Cierre"
+                                  Value="@($"Q{aperturaCaja.MontoCierre?.ToString("F2") ?? "0.00"}")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Estado"
+                                  Value="@(aperturaCaja.Activa == true ? "Activa" : "Cerrada")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true" />
+                </MudItem>
+            }
+
+            <!-- Cierre de caja (solo para aperturas activas) -->
+            @if (IdAperturaCaja.HasValue && aperturaCaja.Activa == true)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Cerrar Caja</MudText>
+                    <MudDivider />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="double?"
+                                     Label="Monto de Cierre"
+                                     @bind-Value="montoCierre"
+                                     Variant="Variant.Outlined"
+                                     Format="F2"
+                                     Adornment="Adornment.Start"
+                                     AdornmentText="Q"
+                                     Min="0"
+                                     HelperText="Monto al cerrar la caja" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Observaciones de Cierre"
+                                  @bind-Value="observacionesCierre"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="250"
+                                  HelperText="Observaciones adicionales del cierre" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Lock"
+                               OnClick="CerrarCaja"
+                               Disabled="@(isSubmitting || !montoCierre.HasValue)"
+                               Class="mt-2">
+                        Cerrar Caja
+                    </MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <div class="d-flex justify-content-between mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/apertura-caja"))">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@(isSubmitting || (IdAperturaCaja.HasValue && aperturaCaja.Activa != true))"
+                       Style="@(IdAperturaCaja.HasValue && aperturaCaja.Activa != true ? "display: none;" : "")">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdAperturaCaja.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdAperturaCaja { get; set; }
+
+    private AperturaCaja aperturaCaja = new AperturaCaja();
+    private AperturaFormModel aperturaForm = new AperturaFormModel();
+    private List<Caja> cajasDisponibles = new();
+    private List<Persona> personas = new();
+    private bool isSubmitting = false;
+
+    // Variables para fechas
+    private DateTime? fechaAperturaDateTime = DateTime.Now;
+
+    // Variables para cierre
+    private double? montoCierre;
+    private string? observacionesCierre;
+
+    // Modelo para el formulario con validaciones
+    public class AperturaFormModel
+    {
+        [Required(ErrorMessage = "Debe seleccionar una caja")]
+        public int? IdCaja { get; set; }
+
+        [Required(ErrorMessage = "Debe seleccionar una persona responsable")]
+        public int? IdPersona { get; set; }
+
+        [Required(ErrorMessage = "El monto de apertura es requerido")]
+        [Range(0, double.MaxValue, ErrorMessage = "El monto debe ser mayor o igual a 0")]
+        public double? MontoApertura { get; set; }
+
+        [StringLength(250, ErrorMessage = "Las observaciones no pueden exceder los 250 caracteres")]
+        public string? Observaciones { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDropdownData();
+
+            if (IdAperturaCaja.HasValue)
+            {
+                try
+                {
+                    aperturaCaja = await AperturaCajaServices.GetByIdAsync(IdAperturaCaja.Value);
+
+                    // Mapear los datos al formulario
+                    aperturaForm.IdCaja = aperturaCaja.IdCaja;
+                    aperturaForm.IdPersona = aperturaCaja.IdPersona;
+                    aperturaForm.MontoApertura = aperturaCaja.MontoApertura;
+                    aperturaForm.Observaciones = aperturaCaja.Observaciones;
+
+                    // Convertir fecha
+                    if (aperturaCaja.FechaApertura.HasValue)
+                    {
+                        fechaAperturaDateTime = aperturaCaja.FechaApertura.Value;
+                    }
+
+                    // Si la caja está cerrada, cargar todas las cajas (no solo disponibles)
+                    if (aperturaCaja.Activa != true)
+                    {
+                        var todasLasCajas = await CajaServices.GetAllAsync();
+                        cajasDisponibles = todasLasCajas;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error al cargar la apertura de caja: {ex.Message}", Severity.Error);
+                    NavigationManager.NavigateTo("/apertura-caja");
+                }
+            }
+            else
+            {
+                aperturaCaja = new AperturaCaja();
+                aperturaForm = new AperturaFormModel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            await LoadPersonas();
+
+            // Si es edición, cargar todas las cajas, si es nuevo, solo las disponibles
+            if (IdAperturaCaja.HasValue)
+            {
+                var todasLasCajas = await CajaServices.GetAllAsync();
+                cajasDisponibles = todasLasCajas;
+            }
+            else
+            {
+                await LoadCajasDisponibles();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar datos: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task LoadPersonas()
+    {
+        try
+        {
+            personas = await PersonaServices.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar personas: {ex.Message}");
+            personas = new List<Persona>();
+        }
+    }
+
+    private async Task LoadCajasDisponibles()
+    {
+        try
+        {
+            // Obtener cajas activas
+            var cajasActivas = await CajaServices.GetActivasAsync();
+
+            // Filtrar cajas que no tengan apertura activa
+            cajasDisponibles = new List<Caja>();
+
+            foreach (var caja in cajasActivas)
+            {
+                var tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(caja.IdCaja);
+                if (!tieneAperturaActiva)
+                {
+                    cajasDisponibles.Add(caja);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar cajas disponibles: {ex.Message}");
+            cajasDisponibles = new List<Caja>();
+        }
+    }
+
+    private async Task CerrarCaja()
+    {
+        if (!montoCierre.HasValue)
+        {
+            Snackbar.Add("Debe ingresar el monto de cierre", Severity.Warning);
+            return;
+        }
+
+        var dialog = await DialogService.ShowMessageBox(
+            "Confirmar cierre de caja",
+            $"¿Está seguro que desea cerrar la caja con un monto de Q{montoCierre.Value:F2}?",
+            yesText: "Cerrar Caja",
+            cancelText: "Cancelar");
+
+        if (dialog == true)
+        {
+            try
+            {
+                isSubmitting = true;
+                StateHasChanged();
+
+                var result = await AperturaCajaServices.CerrarAperturaAsync(
+                    IdAperturaCaja.Value,
+                    montoCierre.Value,
+                    observacionesCierre);
+
+                if (result)
+                {
+                    Snackbar.Add("Caja cerrada exitosamente", Severity.Success);
+                    NavigationManager.NavigateTo("/apertura-caja");
+                }
+                else
+                {
+                    Snackbar.Add("Error al cerrar la caja", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isSubmitting = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validar que la caja no tenga apertura activa (solo para nuevas aperturas)
+            if (!IdAperturaCaja.HasValue && aperturaForm.IdCaja.HasValue)
+            {
+                var tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(aperturaForm.IdCaja.Value);
+                if (tieneAperturaActiva)
+                {
+                    Snackbar.Add("La caja seleccionada ya tiene una apertura activa", Severity.Warning);
+                    return;
+                }
+            }
+
+            // Mapear datos del formulario al modelo
+            if (IdAperturaCaja.HasValue)
+            {
+                aperturaCaja.IdAperturaCaja = IdAperturaCaja.Value;
+            }
+
+            aperturaCaja.IdCaja = aperturaForm.IdCaja;
+            aperturaCaja.IdPersona = aperturaForm.IdPersona;
+            aperturaCaja.MontoApertura = aperturaForm.MontoApertura;
+            aperturaCaja.Observaciones = aperturaForm.Observaciones?.Trim();
+
+            // Convertir fecha
+            if (fechaAperturaDateTime.HasValue)
+            {
+                aperturaCaja.FechaApertura = fechaAperturaDateTime.Value;
+            }
+
+            var result = await AperturaCajaServices.AddUpdateAsync(aperturaCaja);
+
+            if (result)
+            {
+                var message = IdAperturaCaja.HasValue ? "Apertura de caja actualizada correctamente" : "Apertura de caja creada correctamente";
+                Snackbar.Add(message, Severity.Success);
+                NavigationManager.NavigateTo("/apertura-caja");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar la apertura de caja", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"💥 Error en HandleSubmit: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

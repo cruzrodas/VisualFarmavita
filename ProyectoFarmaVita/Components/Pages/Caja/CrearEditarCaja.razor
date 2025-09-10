@@ -1,0 +1,336 @@
+﻿@page "/caja/agregar"
+@page "/caja/agregar/{IdCaja:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.CajaServices
+@using ProyectoFarmaVita.Services.SucursalServices
+@using ProyectoFarmaVita.Services.AperturaCajaServices
+@using MudBlazor
+@using System.ComponentModel.DataAnnotations
+
+@inject ICajaService CajaServices
+@inject ISucursalService SucursalServices
+@inject IAperturaCajaService AperturaCajaServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<h3 style="margin-bottom: 20px;">@(IdCaja.HasValue ? "Editar Caja" : "Nueva Caja")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdCaja.HasValue ? "Editar Caja" : "Agregar Nueva Caja")
+    </MudText>
+
+    <EditForm Model="cajaForm" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <!-- Información básica de la caja -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">Información de la Caja</MudText>
+                <MudDivider />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Nombre de la Caja"
+                              @bind-Value="cajaForm.NombreCaja"
+                              For="@(() => cajaForm.NombreCaja)"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="El nombre de la caja es requerido"
+                              MaxLength="100"
+                              Counter="100"
+                              Immediate="true"
+                              OnBlur="ValidateNombreCaja"
+                              HelperText="Ej: Caja 1, Caja Principal, Caja Express" />
+
+                @if (!string.IsNullOrEmpty(nombreValidationMessage))
+                {
+                    <MudText Color="Color.Error" Typo="Typo.body2" Class="mt-1">@nombreValidationMessage</MudText>
+                }
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int?"
+                           Label="Sucursal"
+                           @bind-Value="cajaForm.IdSucursal"
+                           For="@(() => cajaForm.IdSucursal)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar una sucursal">
+                    @if (sucursales != null)
+                    {
+                        @foreach (var sucursal in sucursales)
+                        {
+                            <MudSelectItem T="int?" Value="@sucursal.IdSucursal">@sucursal.NombreSucursal</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudCheckBox T="bool?"
+                             Label="Caja Activa"
+                             @bind-Value="cajaForm.Activa"
+                             Color="Color.Success"
+                             Class="mt-4" />
+            </MudItem>
+
+            <!-- Información adicional si es edición -->
+            @if (IdCaja.HasValue)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Información Adicional</MudText>
+                    <MudDivider />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Cantidad de Aperturas"
+                                  Value="@aperturaCount.ToString()"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Receipt" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Estado Actual"
+                                  Value="@(tieneAperturaActiva ? "Con apertura activa" : "Sin apertura activa")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@(tieneAperturaActiva? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                                  Style="@(tieneAperturaActiva ? "color: #4caf50;" : "color: #ff9800;")" />
+                </MudItem>
+
+                @if (tieneAperturaActiva)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info">
+                            <MudText>Esta caja tiene una apertura activa. No se puede desactivar hasta que se cierre la apertura actual.</MudText>
+                        </MudAlert>
+                    </MudItem>
+                }
+            }
+        </MudGrid>
+
+        <div class="d-flex justify-content-between mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/caja"))">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@(isSubmitting || !string.IsNullOrEmpty(nombreValidationMessage) || (IdCaja.HasValue && tieneAperturaActiva && cajaForm.Activa != true))">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdCaja.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdCaja { get; set; }
+
+    private Caja caja = new Caja();
+    private CajaFormModel cajaForm = new CajaFormModel();
+    private List<Sucursal> sucursales = new();
+    private bool isSubmitting = false;
+    private string nombreValidationMessage = "";
+    private int aperturaCount = 0;
+    private bool tieneAperturaActiva = false;
+
+    // Modelo para el formulario con validaciones
+    public class CajaFormModel
+    {
+        [Required(ErrorMessage = "El nombre de la caja es requerido")]
+        [StringLength(100, ErrorMessage = "El nombre no puede exceder los 100 caracteres")]
+        public string? NombreCaja { get; set; }
+
+        [Required(ErrorMessage = "Debe seleccionar una sucursal")]
+        public int? IdSucursal { get; set; }
+
+        public bool? Activa { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDropdownData();
+
+            if (IdCaja.HasValue)
+            {
+                try
+                {
+                    caja = await CajaServices.GetByIdAsync(IdCaja.Value);
+
+                    // Mapear los datos al formulario
+                    cajaForm.NombreCaja = caja.NombreCaja;
+                    cajaForm.IdSucursal = caja.IdSucursal;
+                    cajaForm.Activa = caja.Activa;
+
+                    // Cargar información adicional
+                    await LoadAdditionalInfo();
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error al cargar la caja: {ex.Message}", Severity.Error);
+                    NavigationManager.NavigateTo("/caja");
+                }
+            }
+            else
+            {
+                caja = new Caja();
+                cajaForm = new CajaFormModel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            await LoadSucursales();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar datos: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task LoadSucursales()
+    {
+        try
+        {
+            sucursales = await SucursalServices.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar sucursales: {ex.Message}");
+            sucursales = new List<Sucursal>();
+        }
+    }
+
+    private async Task LoadAdditionalInfo()
+    {
+        if (!IdCaja.HasValue) return;
+
+        try
+        {
+            // Contar aperturas de esta caja
+            if (caja.AperturaCaja != null)
+            {
+                aperturaCount = caja.AperturaCaja.Count;
+            }
+
+            // Verificar si tiene apertura activa
+            tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(IdCaja.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar información adicional: {ex.Message}");
+        }
+    }
+
+    private async Task ValidateNombreCaja()
+    {
+        nombreValidationMessage = "";
+
+        if (!string.IsNullOrEmpty(cajaForm.NombreCaja))
+        {
+            try
+            {
+                var exists = await CajaServices.ExistsAsync(cajaForm.NombreCaja, IdCaja);
+                if (exists)
+                {
+                    nombreValidationMessage = "Ya existe una caja con este nombre";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en validación: {ex.Message}");
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validar nombre único una vez más antes de guardar
+            if (!string.IsNullOrEmpty(cajaForm.NombreCaja))
+            {
+                var exists = await CajaServices.ExistsAsync(cajaForm.NombreCaja, IdCaja);
+                if (exists)
+                {
+                    Snackbar.Add("Ya existe una caja con este nombre", Severity.Warning);
+                    return;
+                }
+            }
+
+            // Validar que no se desactive una caja con apertura activa
+            if (IdCaja.HasValue && tieneAperturaActiva && cajaForm.Activa != true)
+            {
+                Snackbar.Add("No se puede desactivar una caja que tiene una apertura activa", Severity.Warning);
+                return;
+            }
+
+            // Mapear datos del formulario al modelo
+            if (IdCaja.HasValue)
+            {
+                caja.IdCaja = IdCaja.Value;
+            }
+
+            caja.NombreCaja = cajaForm.NombreCaja?.Trim();
+            caja.IdSucursal = cajaForm.IdSucursal;
+            caja.Activa = cajaForm.Activa;
+
+            var result = await CajaServices.AddUpdateAsync(caja);
+
+            if (result)
+            {
+                var message = IdCaja.HasValue ? "Caja actualizada correctamente" : "Caja creada correctamente";
+                Snackbar.Add(message, Severity.Success);
+                NavigationManager.NavigateTo("/caja");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar la caja", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"💥 Error en HandleSubmit: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

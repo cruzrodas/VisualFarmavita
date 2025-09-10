@@ -1,0 +1,529 @@
+﻿@page "/caja"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.CajaServices
+@using ProyectoFarmaVita.Services.SucursalServices
+@using ProyectoFarmaVita.Services.AperturaCajaServices
+@using MudBlazor
+
+@inject ICajaService CajaServices
+@inject ISucursalService SucursalServices
+@inject IAperturaCajaService AperturaCajaServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">Cajas</h3>
+<a href="/caja/agregar" class="btn btn-primary mt-2">Nueva Caja</a>
+
+<br />
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">Gestión de Cajas</MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="4">
+            <MudTextField T="string" Label="Buscar por Nombre"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search"
+                          Placeholder="Nombre de caja..." />
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudSelect T="int?"
+                       Label="Filtrar por Sucursal"
+                       @bind-Value="selectedSucursalId"
+                       Variant="Variant.Outlined"
+                       Clearable="true"
+                       OnClearButtonClick="ClearSucursalFilter">
+                <MudSelectItem Value="@((int?)null)">Todas las sucursales</MudSelectItem>
+                @if (sucursales != null)
+                {
+                    @foreach (var sucursal in sucursales)
+                    {
+                        <MudSelectItem Value="@((int?)sucursal.IdSucursal)">@sucursal.NombreSucursal</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Filtrar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.CheckCircle"
+                       OnClick="VerCajasActivas">
+                Cajas Activas (@cajasActivasCount)
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">
+            @if (string.IsNullOrEmpty(searchArea))
+            {
+                <MudText>No hay cajas registradas en el sistema.</MudText>
+            }
+            else
+            {
+                <MudText>No se encontraron cajas que coincidan con los filtros aplicados.</MudText>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable T="Caja"
+                  ServerData="ServerReload"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Nombre Caja</MudTh>
+                <MudTh>Sucursal</MudTh>
+                <MudTh>Estado Actual</MudTh>
+                <MudTh>Aperturas</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.IdCaja</MudTd>
+                <MudTd DataLabel="Nombre">
+                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.NombreCaja</MudText>
+                </MudTd>
+                <MudTd DataLabel="Sucursal">
+                    @if (context.IdSucursalNavigation != null)
+                    {
+                        <MudText Typo="Typo.body2">@context.IdSucursalNavigation.NombreSucursal</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin sucursal</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Estado Actual">
+                    @{
+                        var estadoActual = GetEstadoCaja(context);
+                    }
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@estadoActual.Color"
+                             Icon="@estadoActual.Icon">
+                        @estadoActual.Text
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Aperturas">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                        @(context.AperturaCaja?.Count ?? 0) aperturas
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Activa == true ? Color.Success : Color.Error)">
+                        @(context.Activa == true ? "Activa" : "Inactiva")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-flex gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Title="Editar caja"
+                                       OnClick="@(() => NavigateToEdit(context.IdCaja))" />
+
+                        <MudIconButton Icon="@Icons.Material.Filled.Receipt"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       Title="Ver aperturas"
+                                       OnClick="@(() => VerAperturas(context.IdCaja))" />
+
+                        @if (context.Activa == true && !TieneAperturaActiva(context))
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.LockOpen"
+                                           Color="Color.Success"
+                                           Size="Size.Small"
+                                           Title="Crear apertura"
+                                           OnClick="@(() => CrearApertura(context.IdCaja))" />
+                        }
+
+                        @if (context.Activa == true && !TieneAperturaActiva(context))
+                        {
+                            <MudIconButton Icon="@(context.Activa == true ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                           Color="@(context.Activa == true ? Color.Warning : Color.Success)"
+                                           Size="Size.Small"
+                                           Title="@(context.Activa == true ? "Desactivar caja" : "Activar caja")"
+                                           OnClick="@(() => ToggleStatus(context))" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Cajas por página:"
+                               InfoFormat="@infoFormat"
+                               PageSizeOptions="new int[] { 10, 20, 25, 50, int.MaxValue }"
+                               OnPageChanged="LoadPage"
+                               Class="acciones" />
+            </PagerContent>
+        </MudTable>
+    }
+
+</MudPaper>
+
+@code {
+    private MPaginatedResult<Caja> paginatedResult;
+    private bool isLoading = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private const int PageSize = 20;
+    private string searchArea = "";
+    private List<Sucursal> sucursales = new();
+    private int? selectedSucursalId = null;
+    private int cajasActivasCount = 0;
+    private Dictionary<int, bool> cajasConAperturaActiva = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdownData();
+        await LoadCajasActivasCount();
+        await LoadCajasConAperturaActiva();
+        await LoadPage(1);
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            await LoadSucursales();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos dropdown: {ex.Message}");
+        }
+    }
+
+    private async Task LoadSucursales()
+    {
+        try
+        {
+            sucursales = await SucursalServices.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar sucursales: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCajasActivasCount()
+    {
+        try
+        {
+            var cajasActivas = await CajaServices.GetActivasAsync();
+            cajasActivasCount = cajasActivas?.Count ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar count de cajas activas: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCajasConAperturaActiva()
+    {
+        try
+        {
+            var todasLasCajas = await CajaServices.GetAllAsync();
+            cajasConAperturaActiva.Clear();
+
+            foreach (var caja in todasLasCajas)
+            {
+                var tieneApertura = await AperturaCajaServices.TieneCajaAbiertaAsync(caja.IdCaja);
+                cajasConAperturaActiva[caja.IdCaja] = tieneApertura;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar cajas con apertura activa: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPage(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (selectedSucursalId.HasValue)
+            {
+                // Filtrar por sucursal
+                var cajasBySucursal = await CajaServices.GetBySucursalAsync(selectedSucursalId.Value);
+
+                // Aplicar filtros adicionales
+                cajasBySucursal = ApplyAdditionalFilters(cajasBySucursal);
+
+                // Crear resultado paginado manual
+                var totalItems = cajasBySucursal.Count;
+                var items = cajasBySucursal
+                    .Skip((page - 1) * PageSize)
+                    .Take(PageSize)
+                    .ToList();
+
+                paginatedResult = new MPaginatedResult<Caja>
+                {
+                    Items = items,
+                    TotalCount = totalItems,
+                    PageNumber = page,
+                    PageSize = PageSize
+                };
+            }
+            else
+            {
+                // Sin filtros específicos, usar paginación normal
+                paginatedResult = await CajaServices.GetPaginatedAsync(page, PageSize, searchArea);
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private List<Caja> ApplyAdditionalFilters(List<Caja> cajas)
+    {
+        // Aplicar filtro de búsqueda
+        if (!string.IsNullOrEmpty(searchArea))
+        {
+            cajas = cajas.Where(c =>
+                (c.NombreCaja != null && c.NombreCaja.Contains(searchArea, StringComparison.OrdinalIgnoreCase)) ||
+                (c.IdSucursalNavigation != null &&
+                 c.IdSucursalNavigation.NombreSucursal.Contains(searchArea, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        return cajas;
+    }
+
+    private async Task<TableData<Caja>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        isLoading = true;
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+
+            if (selectedSucursalId.HasValue)
+            {
+                var cajasBySucursal = await CajaServices.GetBySucursalAsync(selectedSucursalId.Value);
+                cajasBySucursal = ApplyAdditionalFilters(cajasBySucursal);
+
+                var totalItems = cajasBySucursal.Count;
+                var items = cajasBySucursal
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                return new TableData<Caja>
+                {
+                    Items = items,
+                    TotalItems = totalItems
+                };
+            }
+            else
+            {
+                paginatedResult = await CajaServices.GetPaginatedAsync(page, pageSize, searchArea);
+
+                return new TableData<Caja>
+                {
+                    Items = paginatedResult.Items,
+                    TotalItems = paginatedResult.TotalCount
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new TableData<Caja>
+            {
+                Items = new List<Caja>(),
+                TotalItems = 0
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Search()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        selectedSucursalId = null;
+        await LoadPage(1);
+    }
+
+    private async Task ClearSucursalFilter()
+    {
+        selectedSucursalId = null;
+        await LoadPage(1);
+    }
+
+    private bool TieneAperturaActiva(Caja caja)
+    {
+        return cajasConAperturaActiva.ContainsKey(caja.IdCaja) && cajasConAperturaActiva[caja.IdCaja];
+    }
+
+    private (Color Color, string Icon, string Text) GetEstadoCaja(Caja caja)
+    {
+        if (caja.Activa != true)
+            return (Color.Error, Icons.Material.Filled.Block, "Inactiva");
+
+        if (TieneAperturaActiva(caja))
+            return (Color.Success, Icons.Material.Filled.LockOpen, "Abierta");
+        else
+            return (Color.Warning, Icons.Material.Filled.Lock, "Cerrada");
+    }
+
+    private async Task VerCajasActivas()
+    {
+        try
+        {
+            var cajasActivas = await CajaServices.GetActivasAsync();
+
+            if (!cajasActivas.Any())
+            {
+                Snackbar.Add("No hay cajas activas", Severity.Info);
+                return;
+            }
+
+            var message = "Cajas activas:\n\n";
+            foreach (var caja in cajasActivas.Take(10))
+            {
+                var estadoTexto = TieneAperturaActiva(caja) ? "Abierta" : "Cerrada";
+                message += $"• {caja.NombreCaja} - {caja.IdSucursalNavigation?.NombreSucursal} ({estadoTexto})\n";
+            }
+
+            if (cajasActivas.Count > 10)
+            {
+                message += $"\n... y {cajasActivas.Count - 10} cajas más";
+            }
+
+            await DialogService.ShowMessageBox("Cajas Activas", message, yesText: "Cerrar");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar cajas activas: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateToEdit(int idCaja)
+    {
+        NavigationManager.NavigateTo($"/caja/agregar/{idCaja}");
+    }
+
+    private async Task VerAperturas(int idCaja)
+    {
+        try
+        {
+            // Navegar a la lista de aperturas con filtro por caja
+            NavigationManager.NavigateTo($"/apertura-caja?cajaId={idCaja}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CrearApertura(int idCaja)
+    {
+        NavigationManager.NavigateTo($"/apertura-caja/agregar?cajaId={idCaja}");
+    }
+
+    private async Task ToggleStatus(Caja caja)
+    {
+        // Verificar si tiene apertura activa antes de desactivar
+        if (caja.Activa == true && TieneAperturaActiva(caja))
+        {
+            Snackbar.Add("No se puede desactivar una caja que tiene una apertura activa", Severity.Warning);
+            return;
+        }
+
+        var action = caja.Activa == true ? "desactivar" : "activar";
+        var newStatus = caja.Activa != true;
+
+        var message = $"¿Está seguro que desea {action} la caja '{caja.NombreCaja}'?";
+
+        var dialog = await DialogService.ShowMessageBox(
+            $"Confirmar {action}",
+            message,
+            yesText: char.ToUpper(action[0]) + action.Substring(1),
+            cancelText: "Cancelar");
+
+        if (dialog == true)
+        {
+            try
+            {
+                caja.Activa = newStatus;
+                var result = await CajaServices.AddUpdateAsync(caja);
+
+                if (result)
+                {
+                    var successMessage = newStatus ? "Caja activada correctamente" : "Caja desactivada correctamente";
+                    Snackbar.Add(successMessage, Severity.Success);
+                    await LoadCajasActivasCount();
+                    await LoadPage(1);
+                }
+                else
+                {
+                    Snackbar.Add($"Error al {action} la caja", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al cambiar estado: {ex.Message}");
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

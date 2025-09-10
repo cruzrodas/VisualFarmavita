@@ -108,12 +108,11 @@
     }
 
     <!-- Gestión de Cajas - Administrador, Gerente, Cajero, Farmaceuta, Vendedor -->
-    @if (CanAccess("ventas"))
+    @if (CanAccess("Cajas"))
     {
         <MudNavGroup Title="Gestión de Cajas" Icon="@Icons.Material.Filled.PointOfSale" Expanded="false">
             <MudNavLink Href="caja" Icon="@Icons.Material.Filled.AttachMoney">Cajas</MudNavLink>
-            <MudNavLink Href="apertura-caja" Icon="@Icons.Material.Filled.History">Control de Cajas</MudNavLink>
-            <MudNavLink Href="aperturacaja" Icon="@Icons.Material.Filled.AttachMoney">Apertura Caja</MudNavLink>
+            <MudNavLink Href="apertura-caja" Icon="@Icons.Material.Filled.History">Apertura Cajas</MudNavLink>
         </MudNavGroup>
     }
 

@@ -65,24 +65,24 @@ namespace ProyectoFarmaVita.Services.AuthorizationServices
                 "Administrador" => new List<string>
                 {
                     "usuarios", "productos", "inventario", "ventas", "reportes",
-                    "configuracion", "sucursales", "proveedores", "clientes", "roles"
+                    "configuracion", "sucursales", "proveedores", "clientes", "roles", "Cajas"
                 },
                 "Gerente" => new List<string>
                 {
                     "productos", "inventario", "ventas", "reportes",
-                    "proveedores", "clientes", "usuarios", "sucursales"
+                    "proveedores", "clientes", "usuarios", "sucursales" , "Cajas"
                 },
                 "Cajero" => new List<string>
                 {
-                    "ventas", "clientes"
+                    "ventas", "clientes" , "Cajas"
                 },
                 "Farmaceuta" => new List<string>
                 {
-                    "productos", "inventario", "ventas", "clientes", "proveedores"
+                    "productos", "inventario", "ventas", "clientes", "proveedores" , "Cajas"
                 },
                 "Vendedor" => new List<string>
                 {
-                    "ventas", "clientes"
+                    "ventas", "clientes" , "Cajas"
                 },
                 _ => new List<string>()
             };

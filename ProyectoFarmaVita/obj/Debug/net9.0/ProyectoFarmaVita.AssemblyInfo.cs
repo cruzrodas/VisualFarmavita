@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ProyectoFarmaVita")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b26cc6b1716fab0d42dc97a5f38a48569a2d3de4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6aeeae80ff014f57f92e5140952e2ee238c42053")]
 [assembly: System.Reflection.AssemblyProductAttribute("ProyectoFarmaVita")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ProyectoFarmaVita")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
