@@ -441,26 +441,11 @@
 
     private async Task OnValidSubmit()
     {
-        if (isSubmitting) return;
-
-        // Validaciones adicionales
-        if (trasladoForm.IdSucursalOrigen == trasladoForm.IdSucursalDestino)
-        {
-            Snackbar.Add("La sucursal origen y destino no pueden ser la misma", Severity.Error);
-            return;
-        }
-
-        if (!detallesTraslado.Any())
-        {
-            Snackbar.Add("Debe agregar al menos un producto al traslado", Severity.Error);
-            return;
-        }
-
-        isSubmitting = true;
-        StateHasChanged();
-
         try
         {
+            if (isSubmitting) return;
+            isSubmitting = true;
+
             var traslado = new Traslado
             {
                 IdTraslado = IdTraslado ?? 0,
@@ -482,45 +467,37 @@
 
                 if (success)
                 {
-                    Console.WriteLine("Traslado actualizado, actualizando detalles...");
+                    Console.WriteLine("Traslado actualizado, actualizando detalles de forma inteligente...");
 
-                    // Eliminar detalles existentes
-                    var detallesExistentes = await TrasladoServices.GetDetallesByTrasladoIdAsync(IdTraslado.Value);
-                    foreach (var detalleExistente in detallesExistentes)
+                    // 🔧 NUEVA LÓGICA: Actualización inteligente de detalles
+                    success = await ActualizarDetallesInteligente(IdTraslado.Value, detallesTraslado);
+
+                    if (success)
                     {
-                        await TrasladoServices.DeleteDetalleAsync(detalleExistente.IdTrasladoDetalle);
+                        // Verificar si cambió a completado y procesar inventarios
+                        await ProcessInventoryIfCompleted(traslado);
                     }
-
-                    // Agregar nuevos detalles
-                    foreach (var detalle in detallesTraslado)
-                    {
-                        detalle.IdTraslado = IdTraslado.Value;
-                        var detalleSuccess = await TrasladoServices.AddDetalleAsync(detalle);
-                        Console.WriteLine($"Detalle agregado: {detalleSuccess}");
-                    }
-
-                    // Verificar si cambió a completado y procesar inventarios
-                    await ProcessInventoryIfCompleted(traslado);
                 }
             }
             else
             {
                 Console.WriteLine("Creando nuevo traslado con detalles...");
 
-                // Crear nuevo traslado con detalles
+                // Crear nuevo traslado con detalles (esto ya funciona bien)
                 success = await TrasladoServices.CreateTrasladoWithDetallesAsync(traslado, detallesTraslado);
 
                 if (success)
                 {
                     Console.WriteLine("Traslado creado exitosamente");
-                    // Procesar inventarios si se crea directamente como completado
                     await ProcessInventoryIfCompleted(traslado);
                 }
             }
 
             if (success)
             {
-                Snackbar.Add(IdTraslado.HasValue ? "Traslado actualizado exitosamente" : "Traslado creado exitosamente", Severity.Success);
+                Snackbar.Add(IdTraslado.HasValue ?
+                    "Traslado actualizado exitosamente" : "Traslado creado exitosamente",
+                    Severity.Success);
                 NavigationManager.NavigateTo("/traslados");
             }
             else
@@ -577,5 +554,93 @@
     private void Cancelar()
     {
         NavigationManager.NavigateTo("/traslados");
+    }
+
+    private async Task<bool> ActualizarDetallesInteligente(int trasladoId, List<TrasladoDetalle> nuevosDetalles)
+    {
+        try
+        {
+            Console.WriteLine($"=== INICIANDO ACTUALIZACIÓN INTELIGENTE DE DETALLES ===");
+
+            // Obtener detalles existentes
+            var detallesExistentes = await TrasladoServices.GetDetallesByTrasladoIdAsync(trasladoId);
+            Console.WriteLine($"Detalles existentes: {detallesExistentes.Count}");
+            Console.WriteLine($"Nuevos detalles: {nuevosDetalles.Count}");
+
+            // Convertir a diccionarios para comparación eficiente
+            var existentesPorProducto = detallesExistentes.ToDictionary(d => d.IdProducto ?? 0, d => d);
+            var nuevosPorProducto = nuevosDetalles.ToDictionary(d => d.IdProducto ?? 0, d => d);
+
+            // 1. ACTUALIZAR detalles existentes que siguen presentes
+            foreach (var nuevoDetalle in nuevosDetalles)
+            {
+                if (existentesPorProducto.ContainsKey(nuevoDetalle.IdProducto ?? 0))
+                {
+                    var detalleExistente = existentesPorProducto[nuevoDetalle.IdProducto ?? 0];
+
+                    // Solo actualizar si cambió la cantidad
+                    if (detalleExistente.Cantidad != nuevoDetalle.Cantidad)
+                    {
+                        Console.WriteLine($"Actualizando producto {nuevoDetalle.IdProducto}: {detalleExistente.Cantidad} → {nuevoDetalle.Cantidad}");
+
+                        detalleExistente.Cantidad = nuevoDetalle.Cantidad;
+                        detalleExistente.IdEstado = nuevoDetalle.IdEstado;
+
+                        var updateSuccess = await TrasladoServices.UpdateDetalleAsync(detalleExistente);
+                        if (!updateSuccess)
+                        {
+                            Console.WriteLine($"Error actualizando detalle para producto {nuevoDetalle.IdProducto}");
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Producto {nuevoDetalle.IdProducto} sin cambios, manteniendo");
+                    }
+                }
+            }
+
+            // 2. AGREGAR nuevos detalles (productos que no existían antes)
+            foreach (var nuevoDetalle in nuevosDetalles)
+            {
+                if (!existentesPorProducto.ContainsKey(nuevoDetalle.IdProducto ?? 0))
+                {
+                    Console.WriteLine($"Agregando nuevo producto {nuevoDetalle.IdProducto} con cantidad {nuevoDetalle.Cantidad}");
+
+                    nuevoDetalle.IdTraslado = trasladoId;
+                    var addSuccess = await TrasladoServices.AddDetalleAsync(nuevoDetalle);
+                    if (!addSuccess)
+                    {
+                        Console.WriteLine($"Error agregando nuevo detalle para producto {nuevoDetalle.IdProducto}");
+                        return false;
+                    }
+                }
+            }
+
+            // 3. ELIMINAR detalles que ya no están presentes (productos removidos)
+            foreach (var detalleExistente in detallesExistentes)
+            {
+                if (!nuevosPorProducto.ContainsKey(detalleExistente.IdProducto ?? 0))
+                {
+                    Console.WriteLine($"Eliminando producto {detalleExistente.IdProducto} (ya no está en la lista)");
+
+                    var deleteSuccess = await TrasladoServices.DeleteDetalleAsync(detalleExistente.IdTrasladoDetalle);
+                    if (!deleteSuccess)
+                    {
+                        Console.WriteLine($"Error eliminando detalle para producto {detalleExistente.IdProducto}");
+                        return false;
+                    }
+                }
+            }
+
+            Console.WriteLine($"=== ACTUALIZACIÓN INTELIGENTE COMPLETADA EXITOSAMENTE ===");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en ActualizarDetallesInteligente: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            return false;
+        }
     }
 }

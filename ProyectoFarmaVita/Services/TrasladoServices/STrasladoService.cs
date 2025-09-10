@@ -679,5 +679,78 @@ namespace ProyectoFarmaVita.Services.TrasladoService
                 return new List<TrasladoDetalle>();
             }
         }
+
+        public async Task<bool> UpdateTrasladoWithDetallesAsync(int trasladoId, Traslado traslado, List<TrasladoDetalle> nuevosDetalles)
+        {
+            var strategy = _farmaDbContext.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _farmaDbContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    // 1. Actualizar traslado principal
+                    var existingTraslado = await _farmaDbContext.Traslado.FindAsync(trasladoId);
+                    if (existingTraslado != null)
+                    {
+                        existingTraslado.IdSucursalOrigen = traslado.IdSucursalOrigen;
+                        existingTraslado.IdSucursalDestino = traslado.IdSucursalDestino;
+                        existingTraslado.FechaTraslado = traslado.FechaTraslado;
+                        existingTraslado.IdEstadoTraslado = traslado.IdEstadoTraslado;
+                        existingTraslado.Observaciones = traslado.Observaciones;
+
+                        _farmaDbContext.Traslado.Update(existingTraslado);
+                    }
+
+                    // 2. Manejar detalles de forma inteligente
+                    var detallesExistentes = await _farmaDbContext.TrasladoDetalle
+                        .Where(td => td.IdTraslado == trasladoId)
+                        .ToListAsync();
+
+                    var existentesPorProducto = detallesExistentes.ToDictionary(d => d.IdProducto ?? 0);
+                    var nuevosPorProducto = nuevosDetalles.ToDictionary(d => d.IdProducto ?? 0);
+
+                    // Actualizar existentes
+                    foreach (var detalle in detallesExistentes)
+                    {
+                        if (nuevosPorProducto.ContainsKey(detalle.IdProducto ?? 0))
+                        {
+                            var nuevoDetalle = nuevosPorProducto[detalle.IdProducto ?? 0];
+                            detalle.Cantidad = nuevoDetalle.Cantidad;
+                            detalle.IdEstado = nuevoDetalle.IdEstado;
+                            _farmaDbContext.TrasladoDetalle.Update(detalle);
+                        }
+                        else
+                        {
+                            // Eliminar si ya no está en la nueva lista
+                            _farmaDbContext.TrasladoDetalle.Remove(detalle);
+                        }
+                    }
+
+                    // Agregar nuevos
+                    foreach (var nuevoDetalle in nuevosDetalles)
+                    {
+                        if (!existentesPorProducto.ContainsKey(nuevoDetalle.IdProducto ?? 0))
+                        {
+                            nuevoDetalle.IdTraslado = trasladoId;
+                            _farmaDbContext.TrasladoDetalle.Add(nuevoDetalle);
+                        }
+                    }
+
+                    await _farmaDbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    Console.WriteLine($"Traslado {trasladoId} actualizado con {nuevosDetalles.Count} detalles");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    Console.WriteLine($"Error en UpdateTrasladoWithDetallesAsync: {ex.Message}");
+                    return false;
+                }
+            });
+        }
     }
 }

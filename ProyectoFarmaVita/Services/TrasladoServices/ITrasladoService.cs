@@ -34,5 +34,7 @@ namespace ProyectoFarmaVita.Services.TrasladoService
         Task<List<TrasladoDetalle>> DebugGetDetallesByTrasladoIdAsync(int trasladoId);
         Task<List<TrasladoDetalle>> GetDetallesSimpleAsync(int trasladoId);
 
+        Task<bool> UpdateTrasladoWithDetallesAsync(int trasladoId, Traslado traslado, List<TrasladoDetalle> nuevosDetalles);
+
     }
 }
