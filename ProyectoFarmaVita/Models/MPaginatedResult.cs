@@ -11,5 +11,6 @@
         public bool HasPreviousPage => PageNumber > 1;
         public int StartItem => (PageNumber - 1) * PageSize + 1;
         public int EndItem => Math.Min(PageNumber * PageSize, TotalCount);
+
     }
 }

@@ -1,0 +1,226 @@
+﻿@page "/traslados"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.TrasladoService
+@using MudBlazor
+
+@inject ITrasladoService TrasladoServices
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">Lista de Traslados</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" Label="Buscar Traslados"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Buscar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Href="/traslados/crear">
+                Nuevo Traslado
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    <MudTable T="Traslado"
+              ServerData="ServerReload"
+              Dense="true"
+              Hover="true"
+              Striped="true"
+              @ref="table"
+              Loading="@isLoading"
+              LoadingProgressColor="Color.Info">
+        <HeaderContent>
+            <MudTh>Fecha</MudTh>
+            <MudTh>Sucursal Origen</MudTh>
+            <MudTh>Sucursal Destino</MudTh>
+            <MudTh>Estado</MudTh>
+            <MudTh>Observaciones</MudTh>
+            <MudTh>Acciones</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Fecha">
+                @if (context.FechaTraslado.HasValue)
+                {
+                    <MudText>@context.FechaTraslado.Value.ToString("dd/MM/yyyy HH:mm")</MudText>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">Sin fecha</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Sucursal Origen">
+                <MudText>@(context.IdSucursalOrigenNavigation?.NombreSucursal ?? "Sin sucursal")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Sucursal Destino">
+                <MudText>@(context.IdSucursalDestinoNavigation?.NombreSucursal ?? "Sin sucursal")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Estado">
+                @{
+                    var estadoTexto = context.IdEstadoTrasladoNavigation?.Estado1 ?? "Sin estado";
+                    var estadoColor = GetEstadoColor(estadoTexto);
+                }
+                <MudChip T="string" Color="@estadoColor" Text="@estadoTexto" Size="Size.Small" />
+            </MudTd>
+            <MudTd DataLabel="Observaciones">
+                <MudText>@(string.IsNullOrEmpty(context.Observaciones) ? "Sin observaciones" : context.Observaciones)</MudText>
+            </MudTd>
+            <MudTd DataLabel="Acciones">
+                <MudButtonGroup OverrideStyles="false">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => EditarTraslado(context.IdTraslado))"
+                                   Title="Editar traslado" />
+                </MudButtonGroup>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No se encontraron traslados</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Cargando traslados...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MPaginatedResult<Traslado> paginatedResult = new();
+    private MudTable<Traslado> table;
+    private string searchArea = "";
+    private bool isLoading = false;
+
+    // Eliminamos OnInitializedAsync que causaba el bucle
+    // La tabla se carga automáticamente al renderizarse
+
+    private async Task<TableData<Traslado>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Agregamos verificación para evitar llamadas innecesarias
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return new TableData<Traslado>
+                {
+                    TotalItems = 0,
+                    Items = new List<Traslado>()
+                };
+            }
+
+            paginatedResult = await TrasladoServices.GetPaginatedAsync(
+                state.Page + 1,
+                state.PageSize,
+                searchArea ?? "",
+                state.SortDirection != SortDirection.Descending
+            );
+
+            return new TableData<Traslado>
+            {
+                TotalItems = paginatedResult.TotalCount,
+                Items = paginatedResult.Items ?? new List<Traslado>()
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar traslados: {ex.Message}");
+            Snackbar.Add("Error al cargar los traslados", Severity.Error);
+
+            return new TableData<Traslado>
+            {
+                TotalItems = 0,
+                Items = new List<Traslado>()
+            };
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Search(string searchText)
+    {
+        searchArea = searchText ?? "";
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private void EditarTraslado(int trasladoId)
+    {
+        NavigationManager.NavigateTo($"/traslados/editar/{trasladoId}");
+    }
+
+    private Color GetEstadoColor(string estado)
+    {
+        return estado?.ToLower() switch
+        {
+            "pendiente" => Color.Warning,
+            "completado" => Color.Success,
+            "cancelado" => Color.Error,
+            "en proceso" => Color.Info,
+            _ => Color.Default
+        };
+    }
+}
+
+<style>
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 200px;
+    }
+</style>

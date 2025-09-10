@@ -147,6 +147,14 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTdWNydXNhbGVzXExpc3RhZG9TdWN1cnNhbGVzLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Traslados/CrearEditarTraslado.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUcmFzbGFkb3NcQ3JlYXJFZGl0YXJUcmFzbGFkby5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Traslados/ListaTraslado.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUcmFzbGFkb3NcTGlzdGFUcmFzbGFkby5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/TurnoTrabajoPages/CrearEditarTurnosTrabajo.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUdXJub1RyYWJham9QYWdlc1xDcmVhckVkaXRhclR1cm5vc1RyYWJham8ucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 

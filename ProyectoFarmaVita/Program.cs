@@ -10,6 +10,7 @@ using ProyectoFarmaVita.Services.CategoriaServices;
 using ProyectoFarmaVita.Services.DepartamentoServices;
 using ProyectoFarmaVita.Services.DireccionServices;
 using ProyectoFarmaVita.Services.EstadoCivilServices;
+using ProyectoFarmaVita.Services.EstadoServices;
 using ProyectoFarmaVita.Services.GeneroServices;
 using ProyectoFarmaVita.Services.InventarioService;
 using ProyectoFarmaVita.Services.LoginServices;
@@ -21,6 +22,7 @@ using ProyectoFarmaVita.Services.ProductoServices;
 using ProyectoFarmaVita.Services.ProveedorServices;
 using ProyectoFarmaVita.Services.SucursalServices;
 using ProyectoFarmaVita.Services.TelefonoServices;
+using ProyectoFarmaVita.Services.TrasladoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoServices;
 
@@ -61,6 +63,8 @@ builder.Services.AddScoped<IProductoService, SProductoService>();
 builder.Services.AddScoped<IInventarioService, SInventarioService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<IRoleAuthorizationService, RoleAuthorizationService>();
+builder.Services.AddScoped<IEstadoService, SEstadoService>();
+builder.Services.AddScoped<ITrasladoService, STrasladoService>();
 
 
 
