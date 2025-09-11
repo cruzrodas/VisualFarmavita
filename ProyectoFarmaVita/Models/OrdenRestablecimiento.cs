@@ -23,13 +23,13 @@ public partial class OrdenRestablecimiento
 
     public string? Observaciones { get; set; }
 
-    public int? IdDetalleOrden { get; set; }
-
     public bool? Aprobada { get; set; }
 
     public int? UsuarioAprobacion { get; set; }
 
-    public virtual DetalleOrdenRes? IdDetalleOrdenNavigation { get; set; }
+    public string? NumeroOrden { get; set; }
+
+    public virtual ICollection<DetalleOrdenRes> DetalleOrdenRes { get; set; } = new List<DetalleOrdenRes>();
 
     public virtual Estado? IdEstadoNavigation { get; set; }
 

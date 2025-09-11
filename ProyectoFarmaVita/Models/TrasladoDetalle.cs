@@ -18,4 +18,6 @@ public partial class TrasladoDetalle
     public virtual Estado? IdEstadoNavigation { get; set; }
 
     public virtual Producto? IdProductoNavigation { get; set; }
+
+    public virtual Traslado? IdTrasladoNavigation { get; set; }
 }

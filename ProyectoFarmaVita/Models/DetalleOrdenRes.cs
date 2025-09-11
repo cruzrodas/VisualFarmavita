@@ -15,9 +15,15 @@ public partial class DetalleOrdenRes
 
     public double? Subtotal { get; set; }
 
-    public int? Total { get; set; }
+    public decimal? Total { get; set; }
+
+    public int? IdOrden { get; set; }
+
+    public decimal? Descuento { get; set; }
+
+    public decimal? Impuesto { get; set; }
+
+    public virtual OrdenRestablecimiento? IdOrdenNavigation { get; set; }
 
     public virtual Producto? IdProductoNavigation { get; set; }
-
-    public virtual ICollection<OrdenRestablecimiento> OrdenRestablecimiento { get; set; } = new List<OrdenRestablecimiento>();
 }

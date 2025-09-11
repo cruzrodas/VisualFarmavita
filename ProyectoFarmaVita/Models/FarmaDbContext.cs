@@ -202,8 +202,20 @@ public partial class FarmaDbContext : DbContext
 
             entity.Property(e => e.IdDetalle).HasColumnName("Id_Detalle");
             entity.Property(e => e.CantidadSolicitada).HasColumnName("Cantidad_Solicitada");
+            entity.Property(e => e.Descuento)
+                .HasDefaultValue(0m)
+                .HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.IdOrden).HasColumnName("Id_Orden");
             entity.Property(e => e.IdProducto).HasColumnName("Id_Producto");
+            entity.Property(e => e.Impuesto)
+                .HasDefaultValue(0m)
+                .HasColumnType("decimal(10, 2)");
             entity.Property(e => e.PrecioUnitario).HasColumnName("Precio_Unitario");
+            entity.Property(e => e.Total).HasColumnType("decimal(10, 2)");
+
+            entity.HasOne(d => d.IdOrdenNavigation).WithMany(p => p.DetalleOrdenRes)
+                .HasForeignKey(d => d.IdOrden)
+                .HasConstraintName("FK_DetalleOrdenRes_OrdenRestablecimiento");
 
             entity.HasOne(d => d.IdProductoNavigation).WithMany(p => p.DetalleOrdenRes)
                 .HasForeignKey(d => d.IdProducto)
@@ -271,10 +283,6 @@ public partial class FarmaDbContext : DbContext
                 .HasForeignKey(d => d.IdAperturaCaja)
                 .HasConstraintName("FK_Factura_AperturaCaja");
 
-            entity.HasOne(d => d.IdDetalleFacturaNavigation).WithMany(p => p.Factura)
-                .HasForeignKey(d => d.IdDetalleFactura)
-                .HasConstraintName("FK_Factura_FacturaDetalle");
-
             entity.HasOne(d => d.IdEstadoNavigation).WithMany(p => p.Factura)
                 .HasForeignKey(d => d.IdEstado)
                 .HasConstraintName("FK_Factura_Estado");
@@ -289,8 +297,14 @@ public partial class FarmaDbContext : DbContext
             entity.HasKey(e => e.IdFacturaDetalle);
 
             entity.Property(e => e.IdFacturaDetalle).HasColumnName("Id_FacturaDetalle");
+            entity.Property(e => e.IdFactura).HasColumnName("Id_Factura");
             entity.Property(e => e.IdProducto).HasColumnName("Id_Producto");
             entity.Property(e => e.PrecioUnitario).HasColumnName("Precio_Unitario");
+
+            entity.HasOne(d => d.IdFacturaNavigation).WithMany(p => p.FacturaDetalle)
+                .HasForeignKey(d => d.IdFactura)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Factura");
 
             entity.HasOne(d => d.IdProductoNavigation).WithMany(p => p.FacturaDetalle)
                 .HasForeignKey(d => d.IdProducto)
@@ -377,13 +391,13 @@ public partial class FarmaDbContext : DbContext
             entity.Property(e => e.IdPersonaSolicitud).HasColumnName("id_PersonaSolicitud");
             entity.Property(e => e.IdProveedor).HasColumnName("Id_Proveedor");
             entity.Property(e => e.IdSucursal).HasColumnName("Id_Sucursal");
+            entity.Property(e => e.NumeroOrden)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("Numero_Orden");
             entity.Property(e => e.Observaciones)
                 .HasMaxLength(150)
                 .IsUnicode(false);
-
-            entity.HasOne(d => d.IdDetalleOrdenNavigation).WithMany(p => p.OrdenRestablecimiento)
-                .HasForeignKey(d => d.IdDetalleOrden)
-                .HasConstraintName("FK_OrdenRestablecimiento_DetalleOrdenRes");
 
             entity.HasOne(d => d.IdEstadoNavigation).WithMany(p => p.OrdenRestablecimiento)
                 .HasForeignKey(d => d.IdEstado)
@@ -672,6 +686,11 @@ public partial class FarmaDbContext : DbContext
             entity.HasOne(d => d.IdProductoNavigation).WithMany(p => p.TrasladoDetalle)
                 .HasForeignKey(d => d.IdProducto)
                 .HasConstraintName("FK_TrasladoDetalle_Producto");
+
+            entity.HasOne(d => d.IdTrasladoNavigation).WithMany(p => p.TrasladoDetalle)
+                .HasForeignKey(d => d.IdTraslado)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Traslado");
         });
 
         modelBuilder.Entity<TurnoTrabajo>(entity =>

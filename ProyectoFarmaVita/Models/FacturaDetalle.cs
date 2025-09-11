@@ -21,7 +21,9 @@ public partial class FacturaDetalle
 
     public double? Total { get; set; }
 
-    public virtual ICollection<Factura> Factura { get; set; } = new List<Factura>();
+    public int? IdFactura { get; set; }
+
+    public virtual Factura? IdFacturaNavigation { get; set; }
 
     public virtual Producto? IdProductoNavigation { get; set; }
 }

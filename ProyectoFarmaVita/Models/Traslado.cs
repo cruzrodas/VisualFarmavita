@@ -22,4 +22,6 @@ public partial class Traslado
     public virtual Sucursal? IdSucursalDestinoNavigation { get; set; }
 
     public virtual Sucursal? IdSucursalOrigenNavigation { get; set; }
+
+    public virtual ICollection<TrasladoDetalle> TrasladoDetalle { get; set; } = new List<TrasladoDetalle>();
 }

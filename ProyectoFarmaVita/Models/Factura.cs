@@ -29,9 +29,9 @@ public partial class Factura
 
     public int? IdDetalleFactura { get; set; }
 
-    public virtual AperturaCaja? IdAperturaCajaNavigation { get; set; }
+    public virtual ICollection<FacturaDetalle> FacturaDetalle { get; set; } = new List<FacturaDetalle>();
 
-    public virtual FacturaDetalle? IdDetalleFacturaNavigation { get; set; }
+    public virtual AperturaCaja? IdAperturaCajaNavigation { get; set; }
 
     public virtual Estado? IdEstadoNavigation { get; set; }
 
