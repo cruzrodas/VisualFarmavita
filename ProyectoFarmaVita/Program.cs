@@ -10,6 +10,7 @@ using ProyectoFarmaVita.Services.CajaServices;
 using ProyectoFarmaVita.Services.CategoriaProductoService;
 using ProyectoFarmaVita.Services.CategoriaServices;
 using ProyectoFarmaVita.Services.DepartamentoServices;
+using ProyectoFarmaVita.Services.DetalleOrdenResServices;
 using ProyectoFarmaVita.Services.DireccionServices;
 using ProyectoFarmaVita.Services.EstadoCivilServices;
 using ProyectoFarmaVita.Services.EstadoServices;
@@ -18,6 +19,7 @@ using ProyectoFarmaVita.Services.InventarioService;
 using ProyectoFarmaVita.Services.LoginServices;
 using ProyectoFarmaVita.Services.MunicipioService;
 using ProyectoFarmaVita.Services.MunicipioServices;
+using ProyectoFarmaVita.Services.OrdenRestablecimientoServices;
 using ProyectoFarmaVita.Services.PersonaServices;
 using ProyectoFarmaVita.Services.ProductoService;
 using ProyectoFarmaVita.Services.ProductoServices;
@@ -69,6 +71,8 @@ builder.Services.AddScoped<IEstadoService, SEstadoService>();
 builder.Services.AddScoped<ITrasladoService, STrasladoService>();
 builder.Services.AddScoped<ICajaService, CajaService>();
 builder.Services.AddScoped<IAperturaCajaService, AperturaCajaService>();
+builder.Services.AddScoped<IDetalleOrdenResService, SDetalleOrdenResService>();
+builder.Services.AddScoped<IOrdenRestablecimientoService, SOrdenRestablecimientoService>();
 
 
 

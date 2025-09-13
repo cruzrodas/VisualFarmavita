@@ -1,5 +1,617 @@
-﻿<h3>OrdenRestablecimientoLista</h3>
+﻿@page "/ordenes-restablecimiento"
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.OrdenRestablecimientoServices
+@using ProyectoFarmaVita.Services.DetalleOrdenResServices
+@using ProyectoFarmaVita.Services.ProveedorServices
+@using ProyectoFarmaVita.Services.EstadoServices
+@using ProyectoFarmaVita.Services.SucursalServices
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IOrdenRestablecimientoService OrdenRestablecimientoService
+@inject IDetalleOrdenResService DetalleOrdenResService
+@inject IProveedorService ProveedorService
+@inject IEstadoService EstadoService
+@inject ISucursalService SucursalService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Órdenes de Restablecimiento - FarmaVita</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (loading)
+    {
+        <div class="loading-container d-flex justify-center align-center">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Class="ml-3" Typo="Typo.h6">Cargando órdenes...</MudText>
+        </div>
+    }
+    else
+    {
+        <MudPaper Elevation="3" Class="pa-6">
+            <!-- Header Section -->
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="6">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Restore" Size="Size.Large" Class="mr-3" Color="Color.Primary" />
+                        <MudText Typo="Typo.h4" Color="Color.Primary">Órdenes de Restablecimiento</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Class="text-muted mt-1">
+                        Gestión de órdenes de reposición de productos
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" md="6" Class="d-flex justify-end align-center">
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="@(() => NavigationManager.NavigateTo("/ordenes-restablecimiento/crear"))"
+                               Class="ml-3">
+                        Nueva Orden
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Table Section -->
+            <MudTable @ref="table"
+                      T="OrdenRestablecimiento"
+                      ServerData="ServerReload"
+                      Dense="true"
+                      Hover="true"
+                      Bordered="true"
+                      Loading="@isLoading"
+                      RowClass="cursor-pointer"
+                      Class="custom-table">
+       
+                <HeaderContent>
+                    <MudTh>
+                        <MudTableSortLabel T="OrdenRestablecimiento" SortLabel="NumeroOrden">
+                            Número
+                        </MudTableSortLabel>
+                    </MudTh>
+                    <MudTh>
+                        <MudTableSortLabel T="OrdenRestablecimiento" SortLabel="Proveedor">
+                            Proveedor
+                        </MudTableSortLabel>
+                    </MudTh>
+                    <MudTh>
+                        <MudTableSortLabel T="OrdenRestablecimiento" SortLabel="FechaOrden">
+                            Fecha Orden
+                        </MudTableSortLabel>
+                    </MudTh>
+                    <MudTh>Sucursal</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Total</MudTh>
+                    <MudTh>Aprobada</MudTh>
+                    <MudTh Class="acciones">Acciones</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd DataLabel="Número">
+                        <MudChip T="string"  Color="Color.Primary" Size="Size.Small" Class="id-chip">
+                            @context.NumeroOrden
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Proveedor">
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                            @(context.IdProveedorNavigation?.NombreProveedor ?? "Sin proveedor")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Fecha Orden">
+                        <MudText Typo="Typo.body2">
+                            @(context.FechaOrden?.ToString("dd/MM/yyyy") ?? "Sin fecha")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Sucursal">
+                        <MudText Typo="Typo.body2">
+                            @(context.IdSucursalNavigation?.NombreSucursal ?? "Sin sucursal")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Estado">
+                        <MudChip T="string" Color="@GetEstadoColor(context.IdEstadoNavigation?.Estado1)" Size="Size.Small">
+                            @(context.IdEstadoNavigation?.Estado1 ?? "Sin estado")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Total">
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                            Q. @(context.Total?.ToString("N2") ?? "0.00")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Aprobada">
+                        @if (context.Aprobada == true)
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                                Sí
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Schedule">
+                                No
+                            </MudChip>
+                        }
+                    </MudTd>
+
+                    <MudTd DataLabel="Acciones" Class="acciones">
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Visibility" 
+                                        IconColor="Color.Info"
+                                        OnClick="@(() => VerDetalles(context.IdOrden))"
+                                        Class="menu-item-view">
+                                Ver Detalles
+                            </MudMenuItem>
+                            
+                            @if (context.IdEstadoNavigation?.Estado1?.ToLower() != "confirmado")
+                            {
+                                <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
+                                            IconColor="Color.Warning"
+                                            OnClick="@(() => NavigationManager.NavigateTo($"/ordenes-restablecimiento/editar/{context.IdOrden}"))"
+                                            Class="menu-item-edit">
+                                    Editar
+                                </MudMenuItem>
+                            }
+
+                            @if (context.Aprobada != true && context.IdEstadoNavigation?.Estado1?.ToLower() != "confirmado")
+                            {
+                                <MudMenuItem Icon="@Icons.Material.Filled.CheckCircle" 
+                                            IconColor="Color.Success"
+                                            OnClick="@(() => AprobarOrden(context))"
+                                            Class="menu-item-activate">
+                                    Aprobar
+                                </MudMenuItem>
+                            }
+
+                            @if (context.IdEstadoNavigation?.Estado1?.ToLower() == "pendiente" && context.Aprobada == true)
+                            {
+                                <MudMenuItem Icon="@Icons.Material.Filled.DoneAll" 
+                                            IconColor="Color.Primary"
+                                            OnClick="@(() => ConfirmarOrden(context))"
+                                            Class="menu-item-activate">
+                                    Confirmar
+                                </MudMenuItem>
+                            }
+
+                            @if (context.IdEstadoNavigation?.Estado1?.ToLower() != "confirmado")
+                            {
+                                <MudDivider />
+                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
+                                            IconColor="Color.Error"
+                                            OnClick="@(() => ConfirmDelete(context))"
+                                            Class="menu-item-delete">
+                                    Eliminar
+                                </MudMenuItem>
+                            }
+                        </MudMenu>
+                    </MudTd>
+                </RowTemplate>
+
+                <PagerContent>
+                    <MudTablePager RowsPerPageString="Órdenes por página:"
+                                   InfoFormat="@infoFormat"
+                                   PageSizeOptions="new int[] { 10, 20, 25, 50, int.MaxValue }"
+                                   Class="acciones" />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+<!-- Dialogo de Detalles -->
+<MudDialog @bind-IsVisible="@mostrarDialogoDetalles" Options="@dialogOptions">
+    <TitleContent>
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-3" />
+            <MudText Typo="Typo.h6">Detalles de la Orden @ordenSeleccionada?.NumeroOrden</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (ordenSeleccionada != null)
+        {
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudCard Class="mb-3">
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">Información General</MudText>
+                            <MudText><strong>Número:</strong> @ordenSeleccionada.NumeroOrden</MudText>
+                            <MudText><strong>Proveedor:</strong> @(ordenSeleccionada.IdProveedorNavigation?.NombreProveedor ?? "Sin proveedor")</MudText>
+                            <MudText><strong>Fecha Orden:</strong> @(ordenSeleccionada.FechaOrden?.ToString("dd/MM/yyyy HH:mm") ?? "Sin fecha")</MudText>
+                            <MudText><strong>Fecha Recepción:</strong> @(ordenSeleccionada.FechaRecepcion?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCard Class="mb-3">
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">Estado y Aprobación</MudText>
+                            <MudText><strong>Estado:</strong> @(ordenSeleccionada.IdEstadoNavigation?.Estado1 ?? "Sin estado")</MudText>
+                            <MudText><strong>Aprobada:</strong> @(ordenSeleccionada.Aprobada == true ? "Sí" : "No")</MudText>
+                            <MudText><strong>Sucursal:</strong> @(ordenSeleccionada.IdSucursalNavigation?.NombreSucursal ?? "Sin sucursal")</MudText>
+                            <MudText><strong>Total:</strong> Q. @(ordenSeleccionada.Total?.ToString("N2") ?? "0.00")</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                @if (!string.IsNullOrEmpty(ordenSeleccionada.Observaciones))
+                {
+                    <MudItem xs="12">
+                        <MudCard Class="mb-3">
+                            <MudCardContent>
+                                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">Observaciones</MudText>
+                                <MudText>@ordenSeleccionada.Observaciones</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">Productos</MudText>
+                            @if (detallesOrden?.Any() == true)
+                            {
+                                <MudTable Items="@detallesOrden" Dense="true" Hover="true">
+                                    <HeaderContent>
+                                        <MudTh>Producto</MudTh>
+                                        <MudTh>Cantidad</MudTh>
+                                        <MudTh>Precio Unitario</MudTh>
+                                        <MudTh>Subtotal</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>@(context.IdProductoNavigation?.NombreProducto ?? "Sin nombre")</MudTd>
+                                        <MudTd>@context.CantidadSolicitada</MudTd>
+                                        <MudTd>Q. @(context.PrecioUnitario?.ToString("N2") ?? "0.00")</MudTd>
+                                        <MudTd>Q. @(context.Subtotal?.ToString("N2") ?? "0.00")</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            }
+                            else
+                            {
+                                <MudAlert Severity="Severity.Info">No hay productos en esta orden.</MudAlert>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => mostrarDialogoDetalles = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .custom-table {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .custom-table .mud-table-head {
+        background-color: #f8f9fa;
+    }
+
+    .custom-table .mud-table-row:hover {
+        background-color: #f0f7ff;
+        transition: background-color 0.2s ease;
+    }
+
+    .loading-container {
+        height: 50vh;
+        padding: 2rem;
+    }
+
+    .id-chip {
+        font-weight: 600;
+    }
+
+    .menu-item-view:hover {
+        background-color: rgba(33, 150, 243, 0.1);
+    }
+
+    .menu-item-edit:hover {
+        background-color: rgba(255, 152, 0, 0.1);
+    }
+
+    .menu-item-activate:hover {
+        background-color: rgba(76, 175, 80, 0.1);
+    }
+
+    .menu-item-delete:hover {
+        background-color: rgba(244, 67, 54, 0.1);
+        color: #f44336 !important;
+    }
+</style>
 
 @code {
+    // Variables principales
+    private bool loading = true;
+    private bool isLoading = false;
+    private string searchString = "";
+    private int? filtroProveedor = null;
+    private int? filtroEstado = null;
+    private bool mostrarAprobadas = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
 
+    // Datos de referencia
+    private List<Proveedor> proveedores = new();
+    private List<Estado> estados = new();
+
+    // Referencias de componentes
+    private MudTable<OrdenRestablecimiento>? table;
+
+    // Variables para el diálogo de detalles
+    private bool mostrarDialogoDetalles = false;
+    private OrdenRestablecimiento? ordenSeleccionada;
+    private List<DetalleOrdenRes>? detallesOrden;
+    private DialogOptions dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+
+    // Variable para prevenir múltiples cargas simultáneas
+    private bool isInitializing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (isInitializing) return;
+        isInitializing = true;
+
+        try
+        {
+            await CargarDatosIniciales();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnInitializedAsync: {ex}");
+            Snackbar.Add($"Error al cargar datos iniciales: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+            isInitializing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarDatosIniciales()
+    {
+        // Cargar datos secuencialmente para evitar problemas de concurrencia
+        await CargarProveedores();
+        await CargarEstados();
+    }
+
+    private async Task CargarProveedores()
+    {
+        try
+        {
+            proveedores = await ProveedorService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar proveedores: {ex.Message}");
+            proveedores = new List<Proveedor>();
+        }
+    }
+
+    private async Task CargarEstados()
+    {
+        try
+        {
+            estados = await EstadoService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar estados: {ex.Message}");
+            estados = new List<Estado>();
+        }
+    }
+
+    private async Task<TableData<OrdenRestablecimiento>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        if (isLoading) return new TableData<OrdenRestablecimiento> { Items = new List<OrdenRestablecimiento>(), TotalItems = 0 };
+        
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var pageNumber = state.Page + 1;
+            var pageSize = state.PageSize;
+            var sortAscending = state.SortDirection == SortDirection.Ascending;
+
+            // Obtener datos paginados del servicio
+            var result = await OrdenRestablecimientoService.GetPaginatedAsync(
+                pageNumber, pageSize, searchString ?? "", sortAscending);
+
+            // Aplicar filtros adicionales
+            var ordenes = result.Items.AsEnumerable();
+
+            if (filtroProveedor.HasValue)
+            {
+                ordenes = ordenes.Where(o => o.IdProveedor == filtroProveedor.Value);
+            }
+
+            if (filtroEstado.HasValue)
+            {
+                ordenes = ordenes.Where(o => o.IdEstado == filtroEstado.Value);
+            }
+
+            if (mostrarAprobadas)
+            {
+                ordenes = ordenes.Where(o => o.Aprobada == true);
+            }
+
+            var ordenesFiltered = ordenes.ToList();
+
+            return new TableData<OrdenRestablecimiento>
+            {
+                Items = ordenesFiltered,
+                TotalItems = result.TotalCount // Usar el total original, no el filtrado
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en ServerReload: {ex}");
+            Snackbar.Add($"Error al cargar órdenes: {ex.Message}", Severity.Error);
+            return new TableData<OrdenRestablecimiento>
+            {
+                Items = new List<OrdenRestablecimiento>(),
+                TotalItems = 0
+            };
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private Color GetEstadoColor(string? estado)
+    {
+        return estado?.ToLower() switch
+        {
+            "pendiente" => Color.Warning,
+            "confirmado" => Color.Success,
+            "cancelado" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task VerDetalles(int idOrden)
+    {
+        try
+        {
+            ordenSeleccionada = await OrdenRestablecimientoService.GetByIdAsync(idOrden);
+            detallesOrden = await DetalleOrdenResService.GetByOrdenIdAsync(idOrden);
+            mostrarDialogoDetalles = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar detalles: {ex}");
+            Snackbar.Add($"Error al cargar detalles: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task AprobarOrden(OrdenRestablecimiento orden)
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst("IdPersona");
+            
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                Snackbar.Add("Error: No se pudo obtener el ID del usuario", Severity.Error);
+                return;
+            }
+
+            var dialog = await DialogService.ShowMessageBox(
+                "Confirmar Aprobación",
+                $"¿Está seguro que desea aprobar la orden {orden.NumeroOrden}?",
+                yesText: "Aprobar",
+                cancelText: "Cancelar");
+
+            if (dialog == true)
+            {
+                var result = await OrdenRestablecimientoService.AprobarOrdenAsync(orden.IdOrden, userId);
+                if (result)
+                {
+                    Snackbar.Add("Orden aprobada correctamente", Severity.Success);
+                    await RecargarTabla();
+                }
+                else
+                {
+                    Snackbar.Add("Error al aprobar la orden", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al aprobar orden: {ex}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmarOrden(OrdenRestablecimiento orden)
+    {
+        try
+        {
+            var dialog = await DialogService.ShowMessageBox(
+                "Confirmar Orden",
+                $"¿Está seguro que desea confirmar la orden {orden.NumeroOrden}? Esta acción no se puede deshacer.",
+                yesText: "Confirmar",
+                cancelText: "Cancelar");
+
+            if (dialog == true)
+            {
+                var result = await OrdenRestablecimientoService.ConfirmarOrdenAsync(orden.IdOrden);
+                if (result)
+                {
+                    Snackbar.Add("Orden confirmada correctamente", Severity.Success);
+                    await RecargarTabla();
+                }
+                else
+                {
+                    Snackbar.Add("Error al confirmar la orden", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al confirmar orden: {ex}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmDelete(OrdenRestablecimiento orden)
+    {
+        try
+        {
+            var dialog = await DialogService.ShowMessageBox(
+                "Confirmar Eliminación",
+                $"¿Está seguro que desea eliminar la orden {orden.NumeroOrden}? Esta acción no se puede deshacer.",
+                yesText: "Eliminar",
+                cancelText: "Cancelar");
+
+            if (dialog == true)
+            {
+                var result = await OrdenRestablecimientoService.DeleteAsync(orden.IdOrden);
+                if (result)
+                {
+                    Snackbar.Add("Orden eliminada correctamente", Severity.Success);
+                    await RecargarTabla();
+                }
+                else
+                {
+                    Snackbar.Add("Error al eliminar la orden", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al eliminar orden: {ex}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Métodos para manejar cambios de filtros
+    private async Task OnFiltroChanged<T>(T value, string filtroName)
+    {
+        switch (filtroName)
+        {
+            case nameof(filtroProveedor):
+                filtroProveedor = (int?)Convert.ChangeType(value, typeof(int?));
+                break;
+            case nameof(filtroEstado):
+                filtroEstado = (int?)Convert.ChangeType(value, typeof(int?));
+                break;
+            case nameof(mostrarAprobadas):
+                mostrarAprobadas = (bool)Convert.ChangeType(value, typeof(bool));
+                break;
+        }
+
+        await RecargarTabla();
+    }
+
+    private async Task RecargarTabla()
+    {
+        if (table != null && !isLoading)
+        {
+            await table.ReloadServerData();
+        }
+    }
 }

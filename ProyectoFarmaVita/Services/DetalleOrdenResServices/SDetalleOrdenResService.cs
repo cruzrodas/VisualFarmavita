@@ -5,21 +5,23 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
 {
     public class SDetalleOrdenResService : IDetalleOrdenResService
     {
-        private readonly FarmaDbContext _farmaDbContext;
+        private readonly IDbContextFactory<FarmaDbContext> _contextFactory;
 
-        public SDetalleOrdenResService(FarmaDbContext farmaDbContext)
+        public SDetalleOrdenResService(IDbContextFactory<FarmaDbContext> contextFactory)
         {
-            _farmaDbContext = farmaDbContext;
+            _contextFactory = contextFactory;
         }
 
         public async Task<bool> AddUpdateAsync(DetalleOrdenRes detalleOrdenRes)
         {
             try
             {
+                using var context = _contextFactory.CreateDbContext();
+
                 if (detalleOrdenRes.IdDetalle > 0)
                 {
                     // Actualizar detalle existente
-                    var existingDetalle = await _farmaDbContext.DetalleOrdenRes.FindAsync(detalleOrdenRes.IdDetalle);
+                    var existingDetalle = await context.DetalleOrdenRes.FindAsync(detalleOrdenRes.IdDetalle);
 
                     if (existingDetalle != null)
                     {
@@ -29,11 +31,11 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
                         existingDetalle.PrecioUnitario = detalleOrdenRes.PrecioUnitario;
                         existingDetalle.Descuento = detalleOrdenRes.Descuento;
                         existingDetalle.Impuesto = detalleOrdenRes.Impuesto;
-                        
+
                         // Calcular subtotal
                         CalcularSubtotal(existingDetalle);
 
-                        _farmaDbContext.DetalleOrdenRes.Update(existingDetalle);
+                        context.DetalleOrdenRes.Update(existingDetalle);
                     }
                     else
                     {
@@ -44,10 +46,10 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
                 {
                     // Crear nuevo detalle
                     CalcularSubtotal(detalleOrdenRes);
-                    _farmaDbContext.DetalleOrdenRes.Add(detalleOrdenRes);
+                    await context.DetalleOrdenRes.AddAsync(detalleOrdenRes);
                 }
 
-                await _farmaDbContext.SaveChangesAsync();
+                await context.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex)
@@ -61,12 +63,13 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
         {
             try
             {
-                var detalle = await _farmaDbContext.DetalleOrdenRes.FindAsync(idDetalle);
+                using var context = _contextFactory.CreateDbContext();
+                var detalle = await context.DetalleOrdenRes.FindAsync(idDetalle);
 
                 if (detalle != null)
                 {
-                    _farmaDbContext.DetalleOrdenRes.Remove(detalle);
-                    await _farmaDbContext.SaveChangesAsync();
+                    context.DetalleOrdenRes.Remove(detalle);
+                    await context.SaveChangesAsync();
                     return true;
                 }
                 return false;
@@ -80,17 +83,21 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
 
         public async Task<List<DetalleOrdenRes>> GetAllAsync()
         {
-            return await _farmaDbContext.DetalleOrdenRes
+            using var context = _contextFactory.CreateDbContext();
+            return await context.DetalleOrdenRes
                 .Include(d => d.IdProductoNavigation)
                 .Include(d => d.IdOrdenNavigation)
+                .AsNoTracking() // Optimización para consultas de solo lectura
                 .ToListAsync();
         }
 
         public async Task<DetalleOrdenRes> GetByIdAsync(int idDetalle)
         {
-            var result = await _farmaDbContext.DetalleOrdenRes
+            using var context = _contextFactory.CreateDbContext();
+            var result = await context.DetalleOrdenRes
                 .Include(d => d.IdProductoNavigation)
                 .Include(d => d.IdOrdenNavigation)
+                .AsNoTracking() // Optimización para consultas de solo lectura
                 .FirstOrDefaultAsync(d => d.IdDetalle == idDetalle);
 
             if (result == null)
@@ -103,96 +110,117 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
 
         public async Task<List<DetalleOrdenRes>> GetByOrdenIdAsync(int idOrden)
         {
-            return await _farmaDbContext.DetalleOrdenRes
+            using var context = _contextFactory.CreateDbContext();
+            return await context.DetalleOrdenRes
                 .Include(d => d.IdProductoNavigation)
                     .ThenInclude(p => p.IdCategoriaNavigation)
                 .Where(d => d.IdOrden == idOrden)
                 .OrderBy(d => d.IdProductoNavigation.NombreProducto)
+                .AsNoTracking() // Optimización para consultas de solo lectura
                 .ToListAsync();
         }
 
         public async Task<bool> AddDetallesAsync(List<DetalleOrdenRes> detalles)
         {
-            var strategy = _farmaDbContext.Database.CreateExecutionStrategy();
-
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                using var transaction = await _farmaDbContext.Database.BeginTransactionAsync();
+                using var context = _contextFactory.CreateDbContext();
+                var strategy = context.Database.CreateExecutionStrategy();
 
-                try
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    foreach (var detalle in detalles)
+                    using var transaction = await context.Database.BeginTransactionAsync();
+
+                    try
                     {
-                        CalcularSubtotal(detalle);
-                        _farmaDbContext.DetalleOrdenRes.Add(detalle);
-                    }
+                        foreach (var detalle in detalles)
+                        {
+                            CalcularSubtotal(detalle);
+                        }
 
-                    await _farmaDbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error en AddDetallesAsync: {ex.Message}");
-                    await transaction.RollbackAsync();
-                    return false;
-                }
-            });
+                        await context.DetalleOrdenRes.AddRangeAsync(detalles);
+                        await context.SaveChangesAsync();
+                        await transaction.CommitAsync();
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error en AddDetallesAsync: {ex.Message}");
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error general en AddDetallesAsync: {ex.Message}");
+                return false;
+            }
         }
 
         public async Task<bool> UpdateDetallesAsync(int idOrden, List<DetalleOrdenRes> detalles)
         {
-            var strategy = _farmaDbContext.Database.CreateExecutionStrategy();
-
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                using var transaction = await _farmaDbContext.Database.BeginTransactionAsync();
+                using var context = _contextFactory.CreateDbContext();
+                var strategy = context.Database.CreateExecutionStrategy();
 
-                try
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    // Eliminar detalles existentes
-                    var detallesExistentes = await _farmaDbContext.DetalleOrdenRes
-                        .Where(d => d.IdOrden == idOrden)
-                        .ToListAsync();
+                    using var transaction = await context.Database.BeginTransactionAsync();
 
-                    if (detallesExistentes.Any())
+                    try
                     {
-                        _farmaDbContext.DetalleOrdenRes.RemoveRange(detallesExistentes);
-                    }
+                        // Eliminar detalles existentes
+                        var detallesExistentes = await context.DetalleOrdenRes
+                            .Where(d => d.IdOrden == idOrden)
+                            .ToListAsync();
 
-                    // Agregar nuevos detalles
-                    foreach (var detalle in detalles)
+                        if (detallesExistentes.Any())
+                        {
+                            context.DetalleOrdenRes.RemoveRange(detallesExistentes);
+                        }
+
+                        // Agregar nuevos detalles
+                        foreach (var detalle in detalles)
+                        {
+                            detalle.IdOrden = idOrden;
+                            CalcularSubtotal(detalle);
+                        }
+
+                        await context.DetalleOrdenRes.AddRangeAsync(detalles);
+                        await context.SaveChangesAsync();
+                        await transaction.CommitAsync();
+                        return true;
+                    }
+                    catch (Exception ex)
                     {
-                        detalle.IdOrden = idOrden;
-                        CalcularSubtotal(detalle);
-                        _farmaDbContext.DetalleOrdenRes.Add(detalle);
+                        Console.WriteLine($"Error en UpdateDetallesAsync: {ex.Message}");
+                        await transaction.RollbackAsync();
+                        return false;
                     }
-
-                    await _farmaDbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error en UpdateDetallesAsync: {ex.Message}");
-                    await transaction.RollbackAsync();
-                    return false;
-                }
-            });
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error general en UpdateDetallesAsync: {ex.Message}");
+                return false;
+            }
         }
 
         public async Task<bool> DeleteByOrdenIdAsync(int idOrden)
         {
             try
             {
-                var detalles = await _farmaDbContext.DetalleOrdenRes
+                using var context = _contextFactory.CreateDbContext();
+                var detalles = await context.DetalleOrdenRes
                     .Where(d => d.IdOrden == idOrden)
                     .ToListAsync();
 
                 if (detalles.Any())
                 {
-                    _farmaDbContext.DetalleOrdenRes.RemoveRange(detalles);
-                    await _farmaDbContext.SaveChangesAsync();
+                    context.DetalleOrdenRes.RemoveRange(detalles);
+                    await context.SaveChangesAsync();
                 }
 
                 return true;
@@ -208,19 +236,12 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
         {
             try
             {
-                var detalles = await _farmaDbContext.DetalleOrdenRes
-                    .Where(d => d.IdOrden == idOrden)
-                    .ToListAsync();
+                using var context = _contextFactory.CreateDbContext();
 
-                decimal total = 0;
-
-                foreach (var detalle in detalles)
-                {
-                    if (detalle.Subtotal.HasValue)
-                    {
-                        total += (decimal)detalle.Subtotal.Value;
-                    }
-                }
+                // Optimización: calcular directamente en la base de datos
+                var total = await context.DetalleOrdenRes
+                    .Where(d => d.IdOrden == idOrden && d.Subtotal.HasValue)
+                    .SumAsync(d => (decimal)d.Subtotal.Value);
 
                 return total;
             }
