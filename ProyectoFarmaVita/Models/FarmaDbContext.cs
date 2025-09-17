@@ -25,6 +25,8 @@ public partial class FarmaDbContext : DbContext
 
     public virtual DbSet<Categoria> Categoria { get; set; }
 
+    public virtual DbSet<Cliente> Cliente { get; set; }
+
     public virtual DbSet<Departamento> Departamento { get; set; }
 
     public virtual DbSet<DetalleOrdenRes> DetalleOrdenRes { get; set; }
@@ -72,6 +74,10 @@ public partial class FarmaDbContext : DbContext
     public virtual DbSet<TrasladoDetalle> TrasladoDetalle { get; set; }
 
     public virtual DbSet<TurnoTrabajo> TurnoTrabajo { get; set; }
+
+    public virtual DbSet<VwFacturaCompleta> VwFacturaCompleta { get; set; }
+
+    public virtual DbSet<VwFacturaDetalleCompleta> VwFacturaDetalleCompleta { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer("Name=DefaultConnection");
@@ -185,6 +191,72 @@ public partial class FarmaDbContext : DbContext
                 .HasColumnName("Nombre_Categoria");
         });
 
+        modelBuilder.Entity<Cliente>(entity =>
+        {
+            entity.HasKey(e => e.IdCliente).HasName("PK__Cliente__3DD0A8CB166798B3");
+
+            entity.ToTable(tb => tb.HasTrigger("TR_Cliente_Auditoria"));
+
+            entity.HasIndex(e => e.Activo, "IX_Cliente_Activo").HasFilter("([Activo]=(1))");
+
+            entity.HasIndex(e => e.DpiCliente, "IX_Cliente_DPI").HasFilter("([DPI_Cliente] IS NOT NULL)");
+
+            entity.HasIndex(e => e.EsClienteFrecuente, "IX_Cliente_Frecuente").HasFilter("([Es_Cliente_Frecuente]=(1))");
+
+            entity.HasIndex(e => e.NitCliente, "IX_Cliente_NIT").HasFilter("([NIT_Cliente] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.NombreCliente, e.ApellidoCliente }, "IX_Cliente_Nombre");
+
+            entity.Property(e => e.IdCliente).HasColumnName("Id_Cliente");
+            entity.Property(e => e.Activo).HasDefaultValue(true);
+            entity.Property(e => e.ApellidoCliente)
+                .HasMaxLength(200)
+                .HasColumnName("Apellido_Cliente");
+            entity.Property(e => e.DireccionCliente)
+                .HasMaxLength(300)
+                .HasColumnName("Direccion_Cliente");
+            entity.Property(e => e.DpiCliente).HasColumnName("DPI_Cliente");
+            entity.Property(e => e.EmailCliente)
+                .HasMaxLength(100)
+                .HasColumnName("Email_Cliente");
+            entity.Property(e => e.EsClienteFrecuente).HasColumnName("Es_Cliente_Frecuente");
+            entity.Property(e => e.FechaCreacion)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("Fecha_Creacion");
+            entity.Property(e => e.FechaModificacion)
+                .HasColumnType("datetime")
+                .HasColumnName("Fecha_Modificacion");
+            entity.Property(e => e.NitCliente)
+                .HasMaxLength(20)
+                .HasColumnName("NIT_Cliente");
+            entity.Property(e => e.NombreCliente)
+                .HasMaxLength(200)
+                .HasColumnName("Nombre_Cliente");
+            entity.Property(e => e.NombreContacto)
+                .HasMaxLength(200)
+                .HasColumnName("Nombre_Contacto");
+            entity.Property(e => e.RazonSocial)
+                .HasMaxLength(300)
+                .HasColumnName("Razon_Social");
+            entity.Property(e => e.RtuCliente)
+                .HasMaxLength(50)
+                .HasColumnName("RTU_Cliente");
+            entity.Property(e => e.TelefonoCliente)
+                .HasMaxLength(15)
+                .HasColumnName("Telefono_Cliente");
+            entity.Property(e => e.TipoCliente)
+                .HasMaxLength(20)
+                .HasDefaultValue("Individual")
+                .HasColumnName("Tipo_Cliente");
+            entity.Property(e => e.UsuarioCreacion)
+                .HasMaxLength(100)
+                .HasColumnName("Usuario_Creacion");
+            entity.Property(e => e.UsuarioModificacion)
+                .HasMaxLength(100)
+                .HasColumnName("Usuario_Modificacion");
+        });
+
         modelBuilder.Entity<Departamento>(entity =>
         {
             entity.HasKey(e => e.IdDepartamento);
@@ -266,11 +338,14 @@ public partial class FarmaDbContext : DbContext
         {
             entity.HasKey(e => e.IdFactura);
 
+            entity.HasIndex(e => e.IdCliente, "IX_Factura_Cliente").HasFilter("([Id_Cliente] IS NOT NULL)");
+
             entity.Property(e => e.IdFactura).HasColumnName("Id_Factura");
             entity.Property(e => e.FechaVenta)
                 .HasColumnType("datetime")
                 .HasColumnName("Fecha_Venta");
             entity.Property(e => e.IdAperturaCaja).HasColumnName("Id_AperturaCaja");
+            entity.Property(e => e.IdCliente).HasColumnName("Id_Cliente");
             entity.Property(e => e.IdDetalleFactura).HasColumnName("Id_DetalleFactura");
             entity.Property(e => e.IdEstado).HasColumnName("Id_Estado");
             entity.Property(e => e.IdTipoPago).HasColumnName("Id_TipoPago");
@@ -282,6 +357,10 @@ public partial class FarmaDbContext : DbContext
             entity.HasOne(d => d.IdAperturaCajaNavigation).WithMany(p => p.Factura)
                 .HasForeignKey(d => d.IdAperturaCaja)
                 .HasConstraintName("FK_Factura_AperturaCaja");
+
+            entity.HasOne(d => d.IdClienteNavigation).WithMany(p => p.Factura)
+                .HasForeignKey(d => d.IdCliente)
+                .HasConstraintName("FK_Factura_Cliente");
 
             entity.HasOne(d => d.IdEstadoNavigation).WithMany(p => p.Factura)
                 .HasForeignKey(d => d.IdEstado)
@@ -713,6 +792,129 @@ public partial class FarmaDbContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("Nombre_Turno");
+        });
+
+        modelBuilder.Entity<VwFacturaCompleta>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("VW_FacturaCompleta");
+
+            entity.Property(e => e.ApellidoCajero)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Apellido_Cajero");
+            entity.Property(e => e.ApellidoCliente)
+                .HasMaxLength(200)
+                .HasColumnName("Apellido_Cliente");
+            entity.Property(e => e.DireccionCliente)
+                .HasMaxLength(300)
+                .HasColumnName("Direccion_Cliente");
+            entity.Property(e => e.DireccionSucursal)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("Direccion_Sucursal");
+            entity.Property(e => e.DpiCliente).HasColumnName("DPI_Cliente");
+            entity.Property(e => e.EmailCliente)
+                .HasMaxLength(100)
+                .HasColumnName("Email_Cliente");
+            entity.Property(e => e.EmailSucursal)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Email_Sucursal");
+            entity.Property(e => e.EsClienteFrecuente).HasColumnName("Es_Cliente_Frecuente");
+            entity.Property(e => e.EstadoFactura)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("Estado_Factura");
+            entity.Property(e => e.FechaVenta)
+                .HasColumnType("datetime")
+                .HasColumnName("Fecha_Venta");
+            entity.Property(e => e.HorarioApertura).HasColumnName("Horario_Apertura");
+            entity.Property(e => e.HorarioCierre).HasColumnName("Horario_Cierre");
+            entity.Property(e => e.IdAperturaCaja).HasColumnName("Id_AperturaCaja");
+            entity.Property(e => e.IdCliente).HasColumnName("Id_Cliente");
+            entity.Property(e => e.IdFactura).HasColumnName("Id_Factura");
+            entity.Property(e => e.NitCliente)
+                .HasMaxLength(20)
+                .HasColumnName("NIT_Cliente");
+            entity.Property(e => e.NombreCaja)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Caja");
+            entity.Property(e => e.NombreCajero)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Cajero");
+            entity.Property(e => e.NombreCliente)
+                .HasMaxLength(200)
+                .HasColumnName("Nombre_Cliente");
+            entity.Property(e => e.NombreCompletoCajero)
+                .HasMaxLength(201)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Completo_Cajero");
+            entity.Property(e => e.NombreCompletoCliente)
+                .HasMaxLength(401)
+                .HasColumnName("Nombre_Completo_Cliente");
+            entity.Property(e => e.NombrePago)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Pago");
+            entity.Property(e => e.NombreSucursal)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Sucursal");
+            entity.Property(e => e.NumeroFactura).HasColumnName("Numero_Factura");
+            entity.Property(e => e.Observaciones)
+                .HasMaxLength(150)
+                .IsUnicode(false);
+            entity.Property(e => e.RazonSocial)
+                .HasMaxLength(300)
+                .HasColumnName("Razon_Social");
+            entity.Property(e => e.TelefonoCliente)
+                .HasMaxLength(15)
+                .HasColumnName("Telefono_Cliente");
+            entity.Property(e => e.TelefonoSucursal).HasColumnName("Telefono_Sucursal");
+            entity.Property(e => e.TipoCliente)
+                .HasMaxLength(20)
+                .HasColumnName("Tipo_Cliente");
+        });
+
+        modelBuilder.Entity<VwFacturaDetalleCompleta>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("VW_FacturaDetalleCompleta");
+
+            entity.Property(e => e.DescripcionCategoria)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("Descripcion_Categoria");
+            entity.Property(e => e.DescrpcionProducto)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Descrpcion_Producto");
+            entity.Property(e => e.IdFactura).HasColumnName("Id_Factura");
+            entity.Property(e => e.IdFacturaDetalle).HasColumnName("Id_FacturaDetalle");
+            entity.Property(e => e.IdProducto).HasColumnName("Id_Producto");
+            entity.Property(e => e.ImpuestoCalculado).HasColumnName("Impuesto_Calculado");
+            entity.Property(e => e.MedicamentoControlado).HasColumnName("Medicamento_Controlado");
+            entity.Property(e => e.NombreCategoria)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Categoria");
+            entity.Property(e => e.NombreProducto)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("Nombre_Producto");
+            entity.Property(e => e.PrecioUnitario).HasColumnName("Precio_Unitario");
+            entity.Property(e => e.PrecioVenta).HasColumnName("Precio_Venta");
+            entity.Property(e => e.RequiereReceta).HasColumnName("Requiere_Receta");
+            entity.Property(e => e.SubtotalCalculado).HasColumnName("Subtotal_Calculado");
+            entity.Property(e => e.UnidadMedida)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("Unidad_Medida");
         });
 
         OnModelCreatingPartial(modelBuilder);
