@@ -200,7 +200,8 @@
                                     <MudText Typo="Typo.subtitle2" Class="mb-3" Color="Color.Primary">Agregar Producto</MudText>
                                     <MudGrid>
                                         <MudItem xs="12" sm="4">
-                                            <MudSelect @bind-Value="productoSeleccionado"
+                                            <MudSelect Value="productoSeleccionado"
+                                                       ValueChanged="@(async (int? value) => await OnProductoSeleccionadoChanged(value))"
                                                        Label="Seleccionar Producto"
                                                        Variant="Variant.Outlined"
                                                        T="int?"
@@ -232,7 +233,9 @@
                                                              Min="0"
                                                              Step="0.01M"
                                                              Format="N2"
-                                                             Disabled="@isSubmitting" />
+                                                             Disabled="@isSubmitting"
+                                                             Adornment="Adornment.Start"
+                                                             AdornmentText="Q." />
                                         </MudItem>
                                         <MudItem xs="12" sm="2">
                                             <MudTextField Value="@CalcularSubtotal().ToString("N2")"
@@ -417,7 +420,9 @@
                                      Variant="Variant.Outlined"
                                      Min="0"
                                      Step="0.01M"
-                                     Format="N2" />
+                                     Format="N2"
+                                     Adornment="Adornment.Start"
+                                     AdornmentText="Q." />
                 </MudItem>
                 <MudItem xs="12">
                     <MudText Typo="Typo.body1">
@@ -509,6 +514,7 @@
     {
         try
         {
+            Console.WriteLine("Iniciando OnInitializedAsync...");
             await LoadInitialData();
 
             if (IdOrden.HasValue)
@@ -522,8 +528,9 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error en OnInitializedAsync: {ex.Message}");
-            Snackbar.Add("Error al cargar los datos del formulario", Severity.Error);
+            Console.WriteLine($"Error crítico en OnInitializedAsync: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error al cargar los datos del formulario: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -539,24 +546,25 @@
             Console.WriteLine("Cargando datos iniciales...");
 
             // Cargar proveedores
-            proveedores = await ProveedorService.GetActiveAsync();
+            proveedores = await ProveedorService.GetActiveAsync() ?? new List<Proveedor>();
             Console.WriteLine($"Proveedores cargados: {proveedores.Count}");
 
             // Cargar sucursales
-            sucursales = await SucursalService.GetAllAsync();
+            sucursales = await SucursalService.GetAllAsync() ?? new List<Sucursal>();
             Console.WriteLine($"Sucursales cargadas: {sucursales.Count}");
 
             // Cargar estados
-            estados = await EstadoService.GetAllAsync();
+            estados = await EstadoService.GetAllAsync() ?? new List<Estado>();
             Console.WriteLine($"Estados cargados: {estados.Count}");
 
             // Cargar productos
-            productos = await ProductoService.GetActivosAsync();
+            productos = await ProductoService.GetActivosAsync() ?? new List<Producto>();
             Console.WriteLine($"Productos cargados: {productos.Count}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al cargar datos iniciales: {ex.Message}");
+            Console.WriteLine($"Error crítico al cargar datos iniciales: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
             throw;
         }
     }
@@ -565,21 +573,32 @@
     {
         try
         {
+            Console.WriteLine("Estableciendo valores por defecto...");
+
             // Generar número de orden
             ordenForm.NumeroOrden = await OrdenRestablecimientoService.GenerarNumeroOrdenAsync();
+            Console.WriteLine($"Número de orden generado: {ordenForm.NumeroOrden}");
 
             // Establecer estado por defecto (Pendiente)
-            var estadoPendiente = estados?.FirstOrDefault(e => e.Estado1?.ToLower() == "pendiente");
+            var estadoPendiente = estados?.FirstOrDefault(e =>
+                !string.IsNullOrEmpty(e.Estado1) &&
+                e.Estado1.ToLower().Trim() == "pendiente");
+
             if (estadoPendiente != null)
             {
                 ordenForm.IdEstado = estadoPendiente.IdEstado;
                 estadoAnterior = estadoPendiente.IdEstado;
-                Console.WriteLine($"Estado por defecto establecido: {estadoPendiente.Estado1}");
+                Console.WriteLine($"Estado por defecto establecido: {estadoPendiente.Estado1} (ID: {estadoPendiente.IdEstado})");
+            }
+            else
+            {
+                Console.WriteLine("Advertencia: No se encontró el estado 'pendiente'");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error al establecer valores por defecto: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
         }
     }
 
@@ -603,6 +622,7 @@
                 estadoAnterior = orden.IdEstado;
 
                 Console.WriteLine($"Datos de la orden cargados exitosamente");
+                Console.WriteLine($"NumeroOrden: {orden.NumeroOrden}, Estado: {orden.IdEstado}, Aprobada: {orden.Aprobada}");
 
                 // Cargar detalles
                 var detalles = await DetalleOrdenResService.GetByOrdenIdAsync(IdOrden.Value);
@@ -622,112 +642,256 @@
             }
             else
             {
-                Console.WriteLine("No se encontró la orden");
-                throw new Exception("Orden no encontrada");
+                Console.WriteLine("Error: No se encontró la orden");
+                throw new Exception($"No se encontró la orden con ID {IdOrden.Value}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al cargar orden para edición: {ex.Message}");
+            Console.WriteLine($"Error crítico al cargar orden para edición: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
             throw;
+        }
+    }
+
+    private async Task OnProductoSeleccionadoChanged(int? nuevoProductoId)
+    {
+        try
+        {
+            productoSeleccionado = nuevoProductoId;
+
+            if (nuevoProductoId.HasValue)
+            {
+                // Buscar el producto seleccionado y establecer su precio de compra
+                var productoSeleccionadoObj = productos?.FirstOrDefault(p => p.IdProducto == nuevoProductoId.Value);
+                if (productoSeleccionadoObj != null)
+                {
+                    precioUnitario = (decimal)(productoSeleccionadoObj.PrecioCompra ?? 0);
+                    Console.WriteLine($"Producto seleccionado: {productoSeleccionadoObj.NombreProducto}, Precio: {precioUnitario}");
+                }
+                else
+                {
+                    precioUnitario = 0;
+                    Console.WriteLine($"Advertencia: No se encontró el producto con ID {nuevoProductoId.Value}");
+                }
+            }
+            else
+            {
+                precioUnitario = 0;
+                Console.WriteLine("Producto deseleccionado");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnProductoSeleccionadoChanged: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
         }
     }
 
     private bool PuedeAgregarProducto()
     {
-        return productoSeleccionado.HasValue &&
-               cantidadProducto > 0 &&
-               precioUnitario > 0 &&
-               !detallesOrden.Any(d => d.IdProducto == productoSeleccionado.Value);
+        try
+        {
+            return productoSeleccionado.HasValue &&
+                   cantidadProducto > 0 &&
+                   precioUnitario > 0 &&
+                   !detallesOrden.Any(d => d.IdProducto == productoSeleccionado.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en PuedeAgregarProducto: {ex.Message}");
+            return false;
+        }
     }
 
     private double CalcularSubtotal()
     {
-        return cantidadProducto * (double)precioUnitario;
+        try
+        {
+            return cantidadProducto * (double)precioUnitario;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al calcular subtotal: {ex.Message}");
+            return 0.0;
+        }
     }
 
     private double CalcularTotalOrden()
     {
-        return detallesOrden.Sum(d => d.Subtotal ?? 0);
+        try
+        {
+            if (detallesOrden?.Any() != true)
+                return 0.0;
+
+            var total = detallesOrden.Sum(d => d.Subtotal ?? 0);
+            Console.WriteLine($"Total calculado: {total}");
+            return total;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al calcular total: {ex.Message}");
+            return 0.0;
+        }
     }
 
     private void AgregarProducto()
     {
-        if (PuedeAgregarProducto())
+        try
         {
-            var detalle = new DetalleOrdenRes
+            if (PuedeAgregarProducto())
             {
-                IdProducto = productoSeleccionado.Value,
-                CantidadSolicitada = cantidadProducto,
-                PrecioUnitario = (double)precioUnitario,
-                Subtotal = CalcularSubtotal(),
-                IdOrden = IdOrden
-            };
+                var subtotal = CalcularSubtotal();
 
-            detallesOrden.Add(detalle);
+                var detalle = new DetalleOrdenRes
+                {
+                    IdProducto = productoSeleccionado.Value,
+                    CantidadSolicitada = cantidadProducto,
+                    PrecioUnitario = (double)precioUnitario,
+                    Subtotal = subtotal,
+                    IdOrden = IdOrden, // Puede ser null para ordenes nuevas
+                    Total = (decimal)subtotal,
+                    Descuento = 0m,
+                    Impuesto = 0m
+                };
 
-            // Limpiar selección
-            productoSeleccionado = null;
-            cantidadProducto = 1;
-            precioUnitario = 0;
+                // Validar el detalle antes de agregarlo
+                ValidarTiposDetalle(detalle);
 
-            Console.WriteLine($"Producto agregado. Total productos: {detallesOrden.Count}");
-            StateHasChanged();
+                detallesOrden.Add(detalle);
+
+                // Limpiar selección
+                productoSeleccionado = null;
+                cantidadProducto = 1;
+                precioUnitario = 0;
+
+                Console.WriteLine($"Producto agregado exitosamente. Total productos: {detallesOrden.Count}");
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine("No se puede agregar el producto. Verificar condiciones.");
+
+                if (!productoSeleccionado.HasValue)
+                    Snackbar.Add("Debe seleccionar un producto", Severity.Warning);
+                else if (cantidadProducto <= 0)
+                    Snackbar.Add("La cantidad debe ser mayor a 0", Severity.Warning);
+                else if (precioUnitario <= 0)
+                    Snackbar.Add("El precio unitario debe ser mayor a 0", Severity.Warning);
+                else if (detallesOrden.Any(d => d.IdProducto == productoSeleccionado.Value))
+                    Snackbar.Add("El producto ya está agregado a la orden", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error crítico al agregar producto: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error al agregar el producto: {ex.Message}", Severity.Error);
         }
     }
 
     private void EliminarProducto(DetalleOrdenRes detalle)
     {
-        detallesOrden.Remove(detalle);
-        Console.WriteLine($"Producto eliminado. Total productos: {detallesOrden.Count}");
-        StateHasChanged();
+        try
+        {
+            if (detalle != null)
+            {
+                detallesOrden.Remove(detalle);
+                Console.WriteLine($"Producto eliminado exitosamente. Total productos: {detallesOrden.Count}");
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al eliminar producto: {ex.Message}");
+            Snackbar.Add("Error al eliminar el producto", Severity.Error);
+        }
     }
 
     private void EditarProducto(DetalleOrdenRes detalle)
     {
-        detalleEditando = detalle;
-        cantidadEdicion = detalle.CantidadSolicitada ?? 1;
+        try
+        {
+            if (detalle != null)
+            {
+                detalleEditando = detalle;
+                cantidadEdicion = detalle.CantidadSolicitada ?? 1;
 
-        // Obtener el precio de compra actual del producto
-        var producto = productos?.FirstOrDefault(p => p.IdProducto == detalle.IdProducto);
-        precioEdicion = (decimal)(producto?.PrecioCompra ?? detalle.PrecioUnitario ?? 0);
+                // Obtener el precio de compra actual del producto
+                var producto = productos?.FirstOrDefault(p => p.IdProducto == detalle.IdProducto);
+                precioEdicion = (decimal)(producto?.PrecioCompra ?? detalle.PrecioUnitario ?? 0);
 
-        mostrarDialogoEditar = true;
+                mostrarDialogoEditar = true;
+                Console.WriteLine($"Iniciando edición de producto - ID: {detalle.IdProducto}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al iniciar edición de producto: {ex.Message}");
+            Snackbar.Add("Error al editar el producto", Severity.Error);
+        }
     }
 
     private void GuardarEdicionProducto()
     {
-        if (detalleEditando != null)
+        try
         {
-            detalleEditando.CantidadSolicitada = cantidadEdicion;
-            detalleEditando.PrecioUnitario = (double)precioEdicion;
-            detalleEditando.Subtotal = cantidadEdicion * (double)precioEdicion;
+            if (detalleEditando != null)
+            {
+                detalleEditando.CantidadSolicitada = cantidadEdicion;
+                detalleEditando.PrecioUnitario = (double)precioEdicion;
+                detalleEditando.Subtotal = cantidadEdicion * (double)precioEdicion;
+                detalleEditando.Total = (decimal)detalleEditando.Subtotal;
 
-            Console.WriteLine($"Producto editado - ID: {detalleEditando.IdProducto}");
-            mostrarDialogoEditar = false;
-            detalleEditando = null;
-            StateHasChanged();
+                // Validar el detalle editado
+                ValidarTiposDetalle(detalleEditando);
+
+                Console.WriteLine($"Producto editado exitosamente - ID: {detalleEditando.IdProducto}");
+                mostrarDialogoEditar = false;
+                detalleEditando = null;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar edición de producto: {ex.Message}");
+            Snackbar.Add("Error al guardar los cambios del producto", Severity.Error);
         }
     }
 
     private async Task OnEstadoChanged(int? nuevoEstado)
     {
-        ordenForm.IdEstado = nuevoEstado;
-
-        // Verificar si se seleccionó el estado "Completado" (ID = 4)
-        if (nuevoEstado == 4)
+        try
         {
-            if (ordenForm.Aprobada == true)
-            {
-                Snackbar.Add("Al guardar con estado 'Completado' y orden aprobada, se actualizarán automáticamente los inventarios", Severity.Info);
-            }
-            else
-            {
-                Snackbar.Add("ATENCIÓN: Para actualizar inventarios, la orden debe estar APROBADA y en estado 'Completado'", Severity.Warning);
-            }
-        }
+            var estadoAnteriorId = ordenForm.IdEstado;
+            ordenForm.IdEstado = nuevoEstado;
 
-        StateHasChanged();
+            // Verificar si se seleccionó el estado "Confirmado"
+            var estadoConfirmado = estados?.FirstOrDefault(e =>
+                !string.IsNullOrEmpty(e.Estado1) &&
+                e.Estado1.ToLower().Trim() == "confirmado");
+
+            if (nuevoEstado == estadoConfirmado?.IdEstado)
+            {
+                if (ordenForm.Aprobada == true)
+                {
+                    Snackbar.Add("IMPORTANTE: Al guardar con estado 'Confirmado' y orden aprobada, se actualizarán automáticamente los inventarios sumando las cantidades solicitadas", Severity.Info);
+                }
+                else
+                {
+                    Snackbar.Add("ATENCIÓN: Para actualizar inventarios automáticamente, la orden debe estar APROBADA antes de confirmarla", Severity.Warning);
+                }
+            }
+
+            Console.WriteLine($"Estado cambiado de {estadoAnteriorId} a {nuevoEstado}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnEstadoChanged: {ex.Message}");
+        }
     }
 
     private async Task OnValidSubmit()
@@ -746,15 +910,20 @@
             isSubmitting = true;
             StateHasChanged();
 
+            Console.WriteLine("Iniciando proceso de guardado de orden...");
+
             // Obtener ID del usuario actual
             var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var userIdClaim = authState.User.FindFirst("IdPersona");
 
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
+                Console.WriteLine("Error: No se pudo obtener el ID del usuario");
                 Snackbar.Add("Error: No se pudo obtener el ID del usuario", Severity.Error);
                 return;
             }
+
+            Console.WriteLine($"Usuario autenticado: {userId}");
 
             var orden = new OrdenRestablecimiento
             {
@@ -771,21 +940,47 @@
                 Total = CalcularTotalOrden()
             };
 
-            bool success;
+            Console.WriteLine($"Orden preparada - NumeroOrden: {orden.NumeroOrden}, Total: {orden.Total}");
+
+            bool success = false;
+            int ordenId = IdOrden ?? 0;
 
             if (IdOrden.HasValue)
             {
                 Console.WriteLine($"Actualizando orden existente - ID: {IdOrden.Value}");
+
+                // PRIMERO: Actualizar la orden
                 success = await OrdenRestablecimientoService.AddUpdateAsync(orden);
 
                 if (success)
                 {
-                    Console.WriteLine("Orden actualizada, actualizando detalles...");
-                    success = await DetalleOrdenResService.UpdateDetallesAsync(IdOrden.Value, detallesOrden);
+                    Console.WriteLine("Orden actualizada exitosamente");
+                    ordenId = IdOrden.Value;
 
-                    if (success)
+                    // SEGUNDO: Procesar inventarios si es necesario
+                    await ProcessInventoryIfConfirmed(orden);
+
+                    // TERCERO: Actualizar detalles
+                    Console.WriteLine("Actualizando detalles de la orden...");
+
+                    // Asegurar que todos los detalles tienen el ID de orden correcto
+                    foreach (var detalle in detallesOrden)
                     {
-                        await ProcessInventoryIfConfirmed(orden);
+                        detalle.IdOrden = ordenId;
+                        ValidarTiposDetalle(detalle);
+                    }
+
+                    var detallesSuccess = await DetalleOrdenResService.UpdateDetallesAsync(ordenId, detallesOrden);
+
+                    if (!detallesSuccess)
+                    {
+                        Console.WriteLine("Error al actualizar detalles de la orden");
+                        Snackbar.Add("Error al actualizar los detalles de la orden", Severity.Error);
+                        success = false;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Detalles actualizados exitosamente");
                     }
                 }
             }
@@ -796,20 +991,37 @@
 
                 if (success && orden.IdOrden > 0)
                 {
-                    Console.WriteLine("Orden creada, agregando detalles...");
+                    ordenId = orden.IdOrden;
+                    Console.WriteLine($"Orden creada exitosamente con ID: {ordenId}");
 
-                    // Actualizar ID de orden en detalles
+                    // Actualizar ID de orden en todos los detalles
                     foreach (var detalle in detallesOrden)
                     {
-                        detalle.IdOrden = orden.IdOrden;
+                        detalle.IdOrden = ordenId;
+                        ValidarTiposDetalle(detalle);
                     }
 
-                    success = await DetalleOrdenResService.AddDetallesAsync(detallesOrden);
+                    // Agregar detalles
+                    var detallesSuccess = await DetalleOrdenResService.AddDetallesAsync(detallesOrden);
 
-                    if (success)
+                    if (detallesSuccess)
                     {
+                        Console.WriteLine("Detalles agregados exitosamente");
+
+                        // Procesar inventarios si es necesario
                         await ProcessInventoryIfConfirmed(orden);
                     }
+                    else
+                    {
+                        Console.WriteLine("Error al agregar detalles de la orden");
+                        Snackbar.Add("Error al agregar los detalles de la orden", Severity.Error);
+                        success = false;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Error: Orden no fue creada correctamente. IdOrden resultante: {orden.IdOrden}");
+                    success = false;
                 }
             }
 
@@ -822,13 +1034,14 @@
             }
             else
             {
-                Snackbar.Add("Error al guardar la orden", Severity.Error);
+                Snackbar.Add("Error al guardar la orden. Verifique los datos e intente nuevamente.", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al guardar orden: {ex.Message}");
-            Snackbar.Add("Error al guardar la orden", Severity.Error);
+            Console.WriteLine($"Error crítico en OnValidSubmit: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error crítico al guardar la orden: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -842,37 +1055,125 @@
         try
         {
             // Verificar si el estado es confirmado
-            var estadoConfirmado = estados?.FirstOrDefault(e => e.Estado1?.ToLower() == "confirmado");
-            var estadoAnteriorObj = estados?.FirstOrDefault(e => e.IdEstado == estadoAnterior);
+            var estadoConfirmado = estados?.FirstOrDefault(e =>
+                !string.IsNullOrEmpty(e.Estado1) &&
+                e.Estado1.ToLower().Trim() == "confirmado");
 
             bool esConfirmado = orden.IdEstado == estadoConfirmado?.IdEstado;
             bool cambioAConfirmado = esConfirmado && estadoAnterior != estadoConfirmado?.IdEstado;
+            bool estaAprobada = orden.Aprobada == true;
 
-            if (cambioAConfirmado)
+            Console.WriteLine($"Evaluando inventarios - Estado actual: {orden.IdEstado}, Estado anterior: {estadoAnterior}");
+            Console.WriteLine($"Es confirmado: {esConfirmado}, Cambió a confirmado: {cambioAConfirmado}, Está aprobada: {estaAprobada}");
+
+            // Solo procesar inventarios si cambió a confirmado Y está aprobada
+            if (cambioAConfirmado && estaAprobada)
             {
-                Console.WriteLine("Procesando inventarios - orden marcada como confirmada");
+                Console.WriteLine("Procesando inventarios - orden confirmada y aprobada");
 
-                var processingSuccess = await OrdenRestablecimientoService.ConfirmarOrdenAsync(orden.IdOrden);
+                // Mostrar mensaje de confirmación antes de procesar
+                var dialog = await DialogService.ShowMessageBox(
+                    "Confirmar Actualización de Inventario",
+                    $"¿Está seguro de confirmar la orden {orden.NumeroOrden}?\n\n" +
+                    $"Esta acción sumará las cantidades solicitadas al inventario actual de la sucursal:\n" +
+                    $"• Total de productos: {detallesOrden.Count}\n" +
+                    $"• Cantidad total a agregar: {detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)} unidades\n\n" +
+                    $"Esta operación NO se puede deshacer.",
+                    yesText: "Sí, Confirmar y Actualizar Inventario",
+                    cancelText: "Cancelar");
 
-                if (processingSuccess)
+                if (dialog == true)
                 {
-                    Snackbar.Add("Inventarios actualizados correctamente", Severity.Success);
+                    Console.WriteLine("Usuario confirmó la actualización de inventarios");
+                    var processingSuccess = await OrdenRestablecimientoService.ConfirmarOrdenAsync(orden.IdOrden);
+
+                    if (processingSuccess)
+                    {
+                        Snackbar.Add($"Orden confirmada exitosamente. Inventarios actualizados: +{detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)} unidades", Severity.Success);
+
+                        // Log detallado para auditoría
+                        Console.WriteLine("INVENTARIOS ACTUALIZADOS:");
+                        foreach (var detalle in detallesOrden)
+                        {
+                            var producto = productos?.FirstOrDefault(p => p.IdProducto == detalle.IdProducto);
+                            Console.WriteLine($"  • {producto?.NombreProducto}: +{detalle.CantidadSolicitada} unidades");
+                        }
+                    }
+                    else
+                    {
+                        Snackbar.Add("Error al confirmar la orden y actualizar inventarios", Severity.Error);
+                        Console.WriteLine("Error en ConfirmarOrdenAsync");
+                    }
                 }
                 else
                 {
-                    Snackbar.Add("Error al actualizar inventarios", Severity.Warning);
+                    Console.WriteLine("Usuario canceló la actualización de inventarios");
+                    // Usuario canceló, revertir el estado en la interfaz
+                    ordenForm.IdEstado = estadoAnterior;
+                    Snackbar.Add("Operación cancelada por el usuario. La orden se guardó pero sin actualizar inventarios.", Severity.Warning);
+                    StateHasChanged();
                 }
+            }
+            else if (esConfirmado && !estaAprobada)
+            {
+                Console.WriteLine("Orden en estado confirmado pero NO aprobada - no se actualizarán inventarios");
+                Snackbar.Add("La orden está en estado 'Confirmado' pero no está aprobada. Los inventarios NO se actualizarán automáticamente.", Severity.Warning);
+            }
+            else
+            {
+                Console.WriteLine("No se requiere actualización de inventarios");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al procesar inventarios: {ex.Message}");
-            Snackbar.Add("Error al procesar los inventarios", Severity.Warning);
+            Console.WriteLine($"Error crítico al procesar inventarios: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error al procesar los inventarios: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Validación de tipos de datos en DetalleOrdenRes
+    private void ValidarTiposDetalle(DetalleOrdenRes detalle)
+    {
+        try
+        {
+            // Asegurar que los tipos son correctos según el modelo
+            if (detalle.Total.HasValue && detalle.Total.Value < 0)
+                detalle.Total = 0m;
+
+            if (detalle.Descuento.HasValue && detalle.Descuento.Value < 0)
+                detalle.Descuento = 0m;
+
+            if (detalle.Impuesto.HasValue && detalle.Impuesto.Value < 0)
+                detalle.Impuesto = 0m;
+
+            if (detalle.CantidadSolicitada.HasValue && detalle.CantidadSolicitada.Value < 0)
+                detalle.CantidadSolicitada = 0;
+
+            if (detalle.PrecioUnitario.HasValue && detalle.PrecioUnitario.Value < 0)
+                detalle.PrecioUnitario = 0;
+
+            if (detalle.Subtotal.HasValue && detalle.Subtotal.Value < 0)
+                detalle.Subtotal = 0;
+
+            Console.WriteLine($"Detalle validado - Producto: {detalle.IdProducto}, Cantidad: {detalle.CantidadSolicitada}, Total: {detalle.Total}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al validar detalle: {ex.Message}");
         }
     }
 
     private void Cancelar()
     {
-        NavigationManager.NavigateTo("/ordenes-restablecimiento");
+        try
+        {
+            Console.WriteLine("Cancelando operación...");
+            NavigationManager.NavigateTo("/ordenes-restablecimiento");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cancelar: {ex.Message}");
+        }
     }
 }

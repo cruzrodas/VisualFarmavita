@@ -267,73 +267,124 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
 
                         if (orden == null)
                         {
-                            Console.WriteLine($"No se encontró la orden con ID {idOrden}");
+                            Console.WriteLine($"❌ No se encontró la orden con ID {idOrden}");
                             await transaction.RollbackAsync();
                             return false;
                         }
 
+                        // VALIDACIÓN CRÍTICA: Verificar que la orden esté aprobada
+                        if (orden.Aprobada != true)
+                        {
+                            Console.WriteLine($"❌ La orden {orden.NumeroOrden} NO está aprobada. No se puede confirmar.");
+                            await transaction.RollbackAsync();
+                            return false;
+                        }
+
+                        Console.WriteLine($"📦 INICIANDO ACTUALIZACIÓN DE INVENTARIOS para orden: {orden.NumeroOrden}");
+                        Console.WriteLine($"📍 Sucursal: {orden.IdSucursalNavigation?.NombreSucursal} (Inventario ID: {orden.IdSucursalNavigation?.IdInventario})");
+
                         // Procesar cada detalle y sumar al inventario
                         foreach (var detalle in orden.DetalleOrdenRes)
                         {
-                            if (detalle.IdProducto.HasValue && detalle.CantidadSolicitada.HasValue)
+                            if (detalle.IdProducto.HasValue && detalle.CantidadSolicitada.HasValue && detalle.CantidadSolicitada > 0)
                             {
                                 var inventario = await context.InventarioProducto
                                     .FirstOrDefaultAsync(ip =>
                                         ip.IdInventario == orden.IdSucursalNavigation.IdInventario &&
                                         ip.IdProducto == detalle.IdProducto);
 
+                                var producto = await context.Producto
+                                    .FirstOrDefaultAsync(p => p.IdProducto == detalle.IdProducto);
+
+                                // Convertir cantidad a long para compatibilidad con el modelo
+                                var cantidadAgregar = (long)detalle.CantidadSolicitada.Value;
+
                                 if (inventario != null)
                                 {
-                                    inventario.Cantidad += detalle.CantidadSolicitada;
+                                    // ACTUALIZAR stock existente
+                                    var stockAnterior = inventario.Cantidad ?? 0L;
+                                    inventario.Cantidad = stockAnterior + cantidadAgregar;
+
                                     context.InventarioProducto.Update(inventario);
-                                    Console.WriteLine($"Stock aumentado - Producto: {detalle.IdProducto}, Nueva cantidad: {inventario.Cantidad}");
+
+                                    Console.WriteLine($"  ✅ {producto?.NombreProducto}: {stockAnterior} + {cantidadAgregar} = {inventario.Cantidad}");
                                 }
                                 else
                                 {
-                                    // Crear nuevo registro en inventario
+                                    // CREAR nuevo registro en inventario
+                                    // Obtener el máximo ID actual de forma segura
                                     var maxId = await context.InventarioProducto
-                                        .MaxAsync(ip => (int?)ip.IdInventarioProducto) ?? 0;
+                                        .MaxAsync(ip => (long?)ip.IdInventarioProducto) ?? 0L;
 
                                     var nuevoInventarioProducto = new InventarioProducto
                                     {
-                                        IdInventarioProducto = maxId + 1,
+                                        IdInventarioProducto = (int)(maxId + 1),
                                         IdInventario = orden.IdSucursalNavigation.IdInventario,
                                         IdProducto = detalle.IdProducto,
-                                        Cantidad = detalle.CantidadSolicitada
+                                        Cantidad = cantidadAgregar,
+                                        StockMinimo = 0L, // Valores por defecto como long
+                                        StockMaximo = cantidadAgregar * 10L // Sugerencia automática como long
                                     };
 
                                     await context.InventarioProducto.AddAsync(nuevoInventarioProducto);
-                                    Console.WriteLine($"Nuevo producto creado en inventario - Producto: {detalle.IdProducto}, Cantidad: {detalle.CantidadSolicitada}");
+                                    Console.WriteLine($"  🆕 {producto?.NombreProducto}: NUEVO producto en inventario con {cantidadAgregar} unidades");
                                 }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"  ⚠️ Detalle ignorado: IdProducto={detalle.IdProducto}, CantidadSolicitada={detalle.CantidadSolicitada}");
                             }
                         }
 
-                        // Cambiar estado a confirmado
+                        // Cambiar estado a confirmado y establecer fecha de recepción
                         var estadoConfirmado = await context.Estado
-                            .FirstOrDefaultAsync(e => e.Estado1.ToLower() == "confirmado");
+                            .FirstOrDefaultAsync(e => e.Estado1 != null && e.Estado1.ToLower().Trim() == "confirmado");
 
                         if (estadoConfirmado != null)
                         {
                             orden.IdEstado = estadoConfirmado.IdEstado;
                             orden.FechaRecepcion = DateTime.Now;
                             context.OrdenRestablecimiento.Update(orden);
+
+                            Console.WriteLine($"✅ Orden {orden.NumeroOrden} confirmada exitosamente");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"⚠️ No se encontró el estado 'confirmado' en la base de datos");
+                            // Opcional: crear el estado si no existe o usar un estado por defecto
                         }
 
-                        await context.SaveChangesAsync();
+                        // Guardar todos los cambios
+                        var changesSaved = await context.SaveChangesAsync();
+                        Console.WriteLine($"💾 Cambios guardados: {changesSaved} registros afectados");
+
                         await transaction.CommitAsync();
+
+                        Console.WriteLine($"🎉 TRANSACCIÓN COMPLETADA - Inventarios actualizados para orden {orden.NumeroOrden}");
                         return true;
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error en ConfirmarOrdenAsync: {ex.Message}");
-                        await transaction.RollbackAsync();
+                        Console.WriteLine($"❌ Error en ConfirmarOrdenAsync (transacción): {ex.Message}");
+                        Console.WriteLine($"📋 StackTrace: {ex.StackTrace}");
+
+                        try
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            Console.WriteLine($"❌ Error adicional en rollback: {rollbackEx.Message}");
+                        }
+
                         return false;
                     }
                 });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error general en ConfirmarOrdenAsync: {ex.Message}");
+                Console.WriteLine($"❌ Error general en ConfirmarOrdenAsync: {ex.Message}");
+                Console.WriteLine($"📋 StackTrace: {ex.StackTrace}");
                 return false;
             }
         }
@@ -393,6 +444,8 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
 
             var numeroSecuencial = (ultimaOrden?.IdOrden ?? 0) + 1;
             return $"ORD-{DateTime.Now:yyyyMM}-{numeroSecuencial:D4}";
-        }
+        } 
+
+
     }
 }
