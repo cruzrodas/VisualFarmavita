@@ -861,31 +861,32 @@
         }
     }
 
-    private async Task OnEstadoChanged(int? nuevoEstado)
+    private void OnEstadoChanged(int? nuevoEstado)
     {
         try
         {
+            if (!nuevoEstado.HasValue) return; // Validar que tenga valor
+
             var estadoAnteriorId = ordenForm.IdEstado;
-            ordenForm.IdEstado = nuevoEstado;
+            ordenForm.IdEstado = nuevoEstado.Value; // Usar .Value
 
-            // Verificar si se seleccionó el estado "Confirmado"
-            var estadoConfirmado = estados?.FirstOrDefault(e =>
+            var estadoCompletado = estados?.FirstOrDefault(e =>
                 !string.IsNullOrEmpty(e.Estado1) &&
-                e.Estado1.ToLower().Trim() == "confirmado");
+                e.Estado1.ToLower().Trim() == "completado");
 
-            if (nuevoEstado == estadoConfirmado?.IdEstado)
+            if (nuevoEstado.Value == estadoCompletado?.IdEstado) // Usar .Value
             {
                 if (ordenForm.Aprobada == true)
                 {
-                    Snackbar.Add("IMPORTANTE: Al guardar con estado 'Confirmado' y orden aprobada, se actualizarán automáticamente los inventarios sumando las cantidades solicitadas", Severity.Info);
+                    Snackbar.Add("IMPORTANTE: Al guardar con estado 'Completado' y orden aprobada, se actualizarán automáticamente los inventarios sumando las cantidades solicitadas", Severity.Info);
                 }
                 else
                 {
-                    Snackbar.Add("ATENCIÓN: Para actualizar inventarios automáticamente, la orden debe estar APROBADA antes de confirmarla", Severity.Warning);
+                    Snackbar.Add("ATENCIÓN: Para actualizar inventarios automáticamente, la orden debe estar APROBADA antes de completarla", Severity.Warning);
                 }
             }
 
-            Console.WriteLine($"Estado cambiado de {estadoAnteriorId} a {nuevoEstado}");
+            Console.WriteLine($"Estado cambiado de {estadoAnteriorId} a {nuevoEstado.Value}");
             StateHasChanged();
         }
         catch (Exception ex)
@@ -893,6 +894,7 @@
             Console.WriteLine($"Error en OnEstadoChanged: {ex.Message}");
         }
     }
+
 
     private async Task OnValidSubmit()
     {
@@ -1054,32 +1056,61 @@
     {
         try
         {
-            // Verificar si el estado es confirmado
-            var estadoConfirmado = estados?.FirstOrDefault(e =>
+            // Verificar si el estado es completado (ID = 4)
+            var estadoCompletado = estados?.FirstOrDefault(e =>
                 !string.IsNullOrEmpty(e.Estado1) &&
-                e.Estado1.ToLower().Trim() == "confirmado");
+                e.Estado1.ToLower().Trim() == "completado");
 
-            bool esConfirmado = orden.IdEstado == estadoConfirmado?.IdEstado;
-            bool cambioAConfirmado = esConfirmado && estadoAnterior != estadoConfirmado?.IdEstado;
+            bool esCompletado = orden.IdEstado == estadoCompletado?.IdEstado;
             bool estaAprobada = orden.Aprobada == true;
 
-            Console.WriteLine($"Evaluando inventarios - Estado actual: {orden.IdEstado}, Estado anterior: {estadoAnterior}");
-            Console.WriteLine($"Es confirmado: {esConfirmado}, Cambió a confirmado: {cambioAConfirmado}, Está aprobada: {estaAprobada}");
+            Console.WriteLine($"Evaluando inventarios - Estado actual: {orden.IdEstado}, Es completado: {esCompletado}, Está aprobada: {estaAprobada}");
+            Console.WriteLine($"Estado Completado encontrado: ID={estadoCompletado?.IdEstado}");
 
-            // Solo procesar inventarios si cambió a confirmado Y está aprobada
-            if (cambioAConfirmado && estaAprobada)
+            // MODIFICACIÓN PRINCIPAL: Procesar inventarios si está completado Y aprobado
+            // Sin importar si cambió de estado en esta sesión
+            if (esCompletado && estaAprobada)
             {
-                Console.WriteLine("Procesando inventarios - orden confirmada y aprobada");
+                Console.WriteLine("✅ Condiciones cumplidas - procesando inventarios: orden completada y aprobada");
+
+                // Verificar si ya fue procesada anteriormente
+                var ordenActual = await OrdenRestablecimientoService.GetByIdAsync(orden.IdOrden);
+                if (ordenActual?.FechaRecepcion.HasValue == true)
+                {
+                    // Mostrar advertencia pero permitir re-procesar
+                    var continuarProceso = await DialogService.ShowMessageBox(
+                        "Orden Ya Procesada",
+                        $"Esta orden ya fue procesada el {ordenActual.FechaRecepcion:dd/MM/yyyy HH:mm}.\n\n" +
+                        "¿Desea volver a procesar la actualización de inventario?\n\n" +
+                        "⚠️ Esto podría resultar en una suma duplicada al inventario.",
+                        yesText: "Sí, Volver a Procesar",
+                        cancelText: "No, Omitir");
+
+                    if (continuarProceso != true)
+                    {
+                        Console.WriteLine("Usuario decidió no re-procesar la orden ya procesada");
+                        Snackbar.Add("Orden guardada sin actualizar inventario (ya fue procesada anteriormente)", Severity.Info);
+                        return;
+                    }
+                }
+
+                // Verificar que tenga productos para procesar
+                if (detallesOrden?.Any() != true)
+                {
+                    Console.WriteLine("⚠️ No hay productos para procesar en esta orden");
+                    Snackbar.Add("No hay productos para actualizar en el inventario", Severity.Warning);
+                    return;
+                }
 
                 // Mostrar mensaje de confirmación antes de procesar
                 var dialog = await DialogService.ShowMessageBox(
                     "Confirmar Actualización de Inventario",
-                    $"¿Está seguro de confirmar la orden {orden.NumeroOrden}?\n\n" +
+                    $"¿Está seguro de procesar la orden {orden.NumeroOrden}?\n\n" +
                     $"Esta acción sumará las cantidades solicitadas al inventario actual de la sucursal:\n" +
                     $"• Total de productos: {detallesOrden.Count}\n" +
                     $"• Cantidad total a agregar: {detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)} unidades\n\n" +
                     $"Esta operación NO se puede deshacer.",
-                    yesText: "Sí, Confirmar y Actualizar Inventario",
+                    yesText: "Sí, Actualizar Inventario",
                     cancelText: "Cancelar");
 
                 if (dialog == true)
@@ -1089,7 +1120,7 @@
 
                     if (processingSuccess)
                     {
-                        Snackbar.Add($"Orden confirmada exitosamente. Inventarios actualizados: +{detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)} unidades", Severity.Success);
+                        Snackbar.Add($"Orden procesada exitosamente. Inventarios actualizados: +{detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)} unidades", Severity.Success);
 
                         // Log detallado para auditoría
                         Console.WriteLine("INVENTARIOS ACTUALIZADOS:");
@@ -1101,23 +1132,25 @@
                     }
                     else
                     {
-                        Snackbar.Add("Error al confirmar la orden y actualizar inventarios", Severity.Error);
+                        Snackbar.Add("Error al procesar la orden y actualizar inventarios", Severity.Error);
                         Console.WriteLine("Error en ConfirmarOrdenAsync");
                     }
                 }
                 else
                 {
                     Console.WriteLine("Usuario canceló la actualización de inventarios");
-                    // Usuario canceló, revertir el estado en la interfaz
-                    ordenForm.IdEstado = estadoAnterior;
                     Snackbar.Add("Operación cancelada por el usuario. La orden se guardó pero sin actualizar inventarios.", Severity.Warning);
-                    StateHasChanged();
                 }
             }
-            else if (esConfirmado && !estaAprobada)
+            else if (esCompletado && !estaAprobada)
             {
-                Console.WriteLine("Orden en estado confirmado pero NO aprobada - no se actualizarán inventarios");
-                Snackbar.Add("La orden está en estado 'Confirmado' pero no está aprobada. Los inventarios NO se actualizarán automáticamente.", Severity.Warning);
+                Console.WriteLine("Orden en estado completado pero NO aprobada - no se actualizarán inventarios");
+                Snackbar.Add("La orden está en estado 'Completado' pero no está aprobada. Los inventarios NO se actualizarán automáticamente.", Severity.Warning);
+            }
+            else if (!esCompletado)
+            {
+                Console.WriteLine($"La orden no está en estado completado (Estado actual ID: {orden.IdEstado})");
+                Snackbar.Add("Para actualizar el inventario, la orden debe estar en estado 'Completado' y aprobada.", Severity.Info);
             }
             else
             {
@@ -1132,7 +1165,6 @@
         }
     }
 
-    // Validación de tipos de datos en DetalleOrdenRes
     private void ValidarTiposDetalle(DetalleOrdenRes detalle)
     {
         try

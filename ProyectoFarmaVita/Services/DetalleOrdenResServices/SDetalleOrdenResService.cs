@@ -171,6 +171,8 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
 
                     try
                     {
+                        Console.WriteLine($"Iniciando UpdateDetallesAsync para orden {idOrden} con {detalles.Count} detalles");
+
                         // Eliminar detalles existentes
                         var detallesExistentes = await context.DetalleOrdenRes
                             .Where(d => d.IdOrden == idOrden)
@@ -178,24 +180,42 @@ namespace ProyectoFarmaVita.Services.DetalleOrdenResServices
 
                         if (detallesExistentes.Any())
                         {
+                            Console.WriteLine($"Eliminando {detallesExistentes.Count} detalles existentes");
                             context.DetalleOrdenRes.RemoveRange(detallesExistentes);
                         }
 
-                        // Agregar nuevos detalles
+                        // Preparar nuevos detalles SIN objetos navegacionales
                         foreach (var detalle in detalles)
                         {
+                            // CRÍTICO: Limpiar referencias navegacionales para evitar tracking
+                            detalle.IdProductoNavigation = null;
+                            detalle.IdOrdenNavigation = null;
+
+                            // Asegurar que tiene el ID de orden correcto
                             detalle.IdOrden = idOrden;
+
+                            // Calcular subtotal
                             CalcularSubtotal(detalle);
+
+                            // Resetear ID de detalle para que sea un nuevo registro
+                            detalle.IdDetalle = 0;
+
+                            Console.WriteLine($"Preparando detalle: Producto={detalle.IdProducto}, Cantidad={detalle.CantidadSolicitada}, Subtotal={detalle.Subtotal}");
                         }
 
+                        // Agregar nuevos detalles
                         await context.DetalleOrdenRes.AddRangeAsync(detalles);
-                        await context.SaveChangesAsync();
+
+                        var cambiosGuardados = await context.SaveChangesAsync();
+                        Console.WriteLine($"Detalles guardados exitosamente: {cambiosGuardados} cambios");
+
                         await transaction.CommitAsync();
                         return true;
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Error en UpdateDetallesAsync: {ex.Message}");
+                        Console.WriteLine($"StackTrace: {ex.StackTrace}");
                         await transaction.RollbackAsync();
                         return false;
                     }

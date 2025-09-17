@@ -275,13 +275,21 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
                         // VALIDACIÓN CRÍTICA: Verificar que la orden esté aprobada
                         if (orden.Aprobada != true)
                         {
-                            Console.WriteLine($"❌ La orden {orden.NumeroOrden} NO está aprobada. No se puede confirmar.");
+                            Console.WriteLine($"❌ La orden {orden.NumeroOrden} NO está aprobada. No se puede procesar.");
                             await transaction.RollbackAsync();
                             return false;
                         }
 
                         Console.WriteLine($"📦 INICIANDO ACTUALIZACIÓN DE INVENTARIOS para orden: {orden.NumeroOrden}");
                         Console.WriteLine($"📍 Sucursal: {orden.IdSucursalNavigation?.NombreSucursal} (Inventario ID: {orden.IdSucursalNavigation?.IdInventario})");
+
+                        // Validar que la sucursal tenga inventario
+                        if (orden.IdSucursalNavigation?.IdInventario == null)
+                        {
+                            Console.WriteLine("❌ La sucursal no tiene inventario configurado");
+                            await transaction.RollbackAsync();
+                            return false;
+                        }
 
                         // Procesar cada detalle y sumar al inventario
                         foreach (var detalle in orden.DetalleOrdenRes)
@@ -312,7 +320,6 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
                                 else
                                 {
                                     // CREAR nuevo registro en inventario
-                                    // Obtener el máximo ID actual de forma segura
                                     var maxId = await context.InventarioProducto
                                         .MaxAsync(ip => (long?)ip.IdInventarioProducto) ?? 0L;
 
@@ -322,8 +329,8 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
                                         IdInventario = orden.IdSucursalNavigation.IdInventario,
                                         IdProducto = detalle.IdProducto,
                                         Cantidad = cantidadAgregar,
-                                        StockMinimo = 0L, // Valores por defecto como long
-                                        StockMaximo = cantidadAgregar * 10L // Sugerencia automática como long
+                                        StockMinimo = 0L,
+                                        StockMaximo = cantidadAgregar * 10L
                                     };
 
                                     await context.InventarioProducto.AddAsync(nuevoInventarioProducto);
@@ -336,22 +343,21 @@ namespace ProyectoFarmaVita.Services.OrdenRestablecimientoServices
                             }
                         }
 
-                        // Cambiar estado a confirmado y establecer fecha de recepción
-                        var estadoConfirmado = await context.Estado
-                            .FirstOrDefaultAsync(e => e.Estado1 != null && e.Estado1.ToLower().Trim() == "confirmado");
+                        // Cambiar estado a completado y establecer fecha de recepción
+                        var estadoCompletado = await context.Estado
+                            .FirstOrDefaultAsync(e => e.Estado1 != null && e.Estado1.ToLower().Trim() == "completado");
 
-                        if (estadoConfirmado != null)
+                        if (estadoCompletado != null)
                         {
-                            orden.IdEstado = estadoConfirmado.IdEstado;
+                            orden.IdEstado = estadoCompletado.IdEstado;
                             orden.FechaRecepcion = DateTime.Now;
                             context.OrdenRestablecimiento.Update(orden);
 
-                            Console.WriteLine($"✅ Orden {orden.NumeroOrden} confirmada exitosamente");
+                            Console.WriteLine($"✅ Orden {orden.NumeroOrden} marcada como completada");
                         }
                         else
                         {
-                            Console.WriteLine($"⚠️ No se encontró el estado 'confirmado' en la base de datos");
-                            // Opcional: crear el estado si no existe o usar un estado por defecto
+                            Console.WriteLine($"⚠️ No se encontró el estado 'completado' en la base de datos");
                         }
 
                         // Guardar todos los cambios
