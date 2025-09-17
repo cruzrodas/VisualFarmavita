@@ -1,0 +1,878 @@
+﻿@page "/ordenes-restablecimiento/crear"
+@page "/ordenes-restablecimiento/editar/{IdOrden:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.OrdenRestablecimientoServices
+@using ProyectoFarmaVita.Services.DetalleOrdenResServices
+@using ProyectoFarmaVita.Services.ProveedorServices
+@using ProyectoFarmaVita.Services.EstadoServices
+@using ProyectoFarmaVita.Services.SucursalServices
+@using ProyectoFarmaVita.Services.ProductoService
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.ComponentModel.DataAnnotations
+
+@inject IOrdenRestablecimientoService OrdenRestablecimientoService
+@inject IDetalleOrdenResService DetalleOrdenResService
+@inject IProveedorService ProveedorService
+@inject IEstadoService EstadoService
+@inject ISucursalService SucursalService
+@inject IProductoService ProductoService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>@(IdOrden.HasValue ? "Editar" : "Crear") Orden de Restablecimiento - FarmaVita</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (loading)
+    {
+        <div class="loading-container d-flex justify-center align-center">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Class="ml-3" Typo="Typo.h6">Cargando datos...</MudText>
+        </div>
+    }
+    else
+    {
+        <MudPaper Elevation="3" Class="pa-6">
+            <!-- Header Section -->
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="8">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Restore" Size="Size.Large" Class="mr-3" Color="Color.Primary" />
+                        <div>
+                            <MudText Typo="Typo.h4" Color="Color.Primary">
+                                @(IdOrden.HasValue ? "Editar Orden de Restablecimiento" : "Nueva Orden de Restablecimiento")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="text-muted">
+                                @(IdOrden.HasValue ? $"Modificando orden #{ordenForm.NumeroOrden}" : "Crear nueva orden de reposición de productos")
+                            </MudText>
+                        </div>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex justify-end align-center">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => NavigationManager.NavigateTo("/ordenes-restablecimiento"))"
+                               Class="mr-3">
+                        Volver a Lista
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Form Section -->
+            <EditForm Model="@ordenForm" OnValidSubmit="OnValidSubmit">
+                <DataAnnotationsValidator />
+
+                <MudGrid>
+                    <!-- Información básica de la orden -->
+                    <MudItem xs="12">
+                        <MudCard Elevation="2" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6" Color="Color.Primary">
+                                        <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                                        Información de la Orden
+                                    </MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="12" sm="6">
+                                        <MudTextField @bind-Value="ordenForm.NumeroOrden"
+                                                      Label="Número de Orden"
+                                                      Variant="Variant.Outlined"
+                                                      ReadOnly="true"
+                                                      Disabled="true"
+                                                      HelperText="Se genera automáticamente" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudSelect @bind-Value="ordenForm.IdProveedor"
+                                                   Label="Proveedor"
+                                                   Required="true"
+                                                   Variant="Variant.Outlined"
+                                                   T="int?"
+                                                   Disabled="@isSubmitting"
+                                                   HelperText="Seleccione el proveedor">
+                                            <MudSelectItem Value="@((int?)null)">Seleccionar proveedor</MudSelectItem>
+                                            @if (proveedores?.Any() == true)
+                                            {
+                                                @foreach (var proveedor in proveedores)
+                                                {
+                                                    <MudSelectItem Value="@((int?)proveedor.IdProveedor)">@proveedor.NombreProveedor</MudSelectItem>
+                                                }
+                                            }
+                                        </MudSelect>
+                                        <ValidationMessage For="@(() => ordenForm.IdProveedor)" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudSelect @bind-Value="ordenForm.IdSucursal"
+                                                   Label="Sucursal"
+                                                   Required="true"
+                                                   Variant="Variant.Outlined"
+                                                   T="int?"
+                                                   Disabled="@isSubmitting"
+                                                   HelperText="Seleccione la sucursal">
+                                            <MudSelectItem Value="@((int?)null)">Seleccionar sucursal</MudSelectItem>
+                                            @if (sucursales?.Any() == true)
+                                            {
+                                                @foreach (var sucursal in sucursales)
+                                                {
+                                                    <MudSelectItem Value="@((int?)sucursal.IdSucursal)">@sucursal.NombreSucursal</MudSelectItem>
+                                                }
+                                            }
+                                        </MudSelect>
+                                        <ValidationMessage For="@(() => ordenForm.IdSucursal)" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudSelect T="int?"
+                                                   Label="Estado"
+                                                   Required="true"
+                                                   Variant="Variant.Outlined"
+                                                   Value="ordenForm.IdEstado"
+                                                   ValueChanged="OnEstadoChanged"
+                                                   Disabled="@isSubmitting"
+                                                   HelperText="Estado actual de la orden">
+                                            @if (estados?.Any() == true)
+                                            {
+                                                @foreach (var estado in estados)
+                                                {
+                                                    <MudSelectItem Value="@((int?)estado.IdEstado)">
+                                                        @estado.Estado1
+                                                    </MudSelectItem>
+                                                }
+                                            }
+                                        </MudSelect>
+                                        <ValidationMessage For="@(() => ordenForm.IdEstado)" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudDatePicker @bind-Date="fechaOrden"
+                                                       Label="Fecha de la Orden"
+                                                       Variant="Variant.Outlined"
+                                                       DateFormat="dd/MM/yyyy"
+                                                       Disabled="@isSubmitting"
+                                                       HelperText="Fecha de creación de la orden" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudDatePicker @bind-Date="fechaRecepcion"
+                                                       Label="Fecha de Recepción"
+                                                       Variant="Variant.Outlined"
+                                                       DateFormat="dd/MM/yyyy"
+                                                       Disabled="@isSubmitting"
+                                                       HelperText="Fecha estimada de recepción (opcional)" />
+                                    </MudItem>
+
+                                    <MudItem xs="12">
+                                        <MudTextField @bind-Value="ordenForm.Observaciones"
+                                                      Label="Observaciones"
+                                                      Variant="Variant.Outlined"
+                                                      Lines="3"
+                                                      MaxLength="150"
+                                                      Counter="150"
+                                                      Disabled="@isSubmitting"
+                                                      HelperText="Observaciones adicionales sobre la orden" />
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- Productos de la orden -->
+                    <MudItem xs="12">
+                        <MudCard Elevation="2" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6" Color="Color.Primary">
+                                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+                                        Productos a Solicitar
+                                    </MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <!-- Agregar producto -->
+                                <MudCard Elevation="1" Class="pa-4 mb-4" Style="background-color: #f8f9fa;">
+                                    <MudText Typo="Typo.subtitle2" Class="mb-3" Color="Color.Primary">Agregar Producto</MudText>
+                                    <MudGrid>
+                                        <MudItem xs="12" sm="4">
+                                            <MudSelect @bind-Value="productoSeleccionado"
+                                                       Label="Seleccionar Producto"
+                                                       Variant="Variant.Outlined"
+                                                       T="int?"
+                                                       Disabled="@isSubmitting"
+                                                       Clearable="true">
+                                                <MudSelectItem Value="@((int?)null)">Seleccionar producto</MudSelectItem>
+                                                @if (productos?.Any() == true)
+                                                {
+                                                    @foreach (var producto in productos)
+                                                    {
+                                                        <MudSelectItem Value="@((int?)producto.IdProducto)">
+                                                            @producto.NombreProducto
+                                                        </MudSelectItem>
+                                                    }
+                                                }
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="2">
+                                            <MudNumericField @bind-Value="cantidadProducto"
+                                                             Label="Cantidad"
+                                                             Variant="Variant.Outlined"
+                                                             Min="1"
+                                                             Disabled="@isSubmitting" />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="2">
+                                            <MudNumericField @bind-Value="precioUnitario"
+                                                             Label="Precio Unitario"
+                                                             Variant="Variant.Outlined"
+                                                             Min="0"
+                                                             Step="0.01M"
+                                                             Format="N2"
+                                                             Disabled="@isSubmitting" />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="2">
+                                            <MudTextField Value="@CalcularSubtotal().ToString("N2")"
+                                                          Label="Subtotal"
+                                                          Variant="Variant.Outlined"
+                                                          ReadOnly="true"
+                                                          Adornment="Adornment.Start"
+                                                          AdornmentText="Q." />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="2" Class="d-flex align-center">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Success"
+                                                       StartIcon="@Icons.Material.Filled.Add"
+                                                       OnClick="AgregarProducto"
+                                                       Disabled="@(!PuedeAgregarProducto() || isSubmitting)"
+                                                       FullWidth="true">
+                                                Agregar
+                                            </MudButton>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCard>
+
+                                <!-- Lista de productos agregados -->
+                                @if (detallesOrden?.Any() == true)
+                                {
+                                    <MudTable T="DetalleOrdenRes" Items="@detallesOrden" Dense="true" Hover="true" Striped="true" Class="custom-table">
+                                        <HeaderContent>
+                                            <MudTh>Producto</MudTh>
+                                            <MudTh>Cantidad</MudTh>
+                                            <MudTh>Precio Unit.</MudTh>
+                                            <MudTh>Subtotal</MudTh>
+                                            <MudTh Class="acciones">Acciones</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate Context="detalle">
+                                            <MudTd DataLabel="Producto">
+                                                @{
+                                                    var producto = productos?.FirstOrDefault(p => p.IdProducto == detalle.IdProducto);
+                                                }
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Inventory2" Class="mr-2" Color="Color.Primary" Size="Size.Small" />
+                                                    <MudText>@(producto?.NombreProducto ?? "Producto no encontrado")</MudText>
+                                                </div>
+                                            </MudTd>
+                                            <MudTd DataLabel="Cantidad">
+                                                <MudChip T="string" Color="Color.Info" Size="Size.Small">
+                                                    @detalle.CantidadSolicitada
+                                                </MudChip>
+                                            </MudTd>
+                                            <MudTd DataLabel="Precio Unit.">
+                                                <MudText>Q. @(detalle.PrecioUnitario?.ToString("N2") ?? "0.00")</MudText>
+                                            </MudTd>
+                                            <MudTd DataLabel="Subtotal">
+                                                <MudText Style="font-weight: 600;">Q. @(detalle.Subtotal?.ToString("N2") ?? "0.00")</MudText>
+                                            </MudTd>
+                                            <MudTd DataLabel="Acciones" Class="acciones">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                               Color="Color.Primary"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => EditarProducto(detalle))"
+                                                               Title="Editar producto"
+                                                               Disabled="@isSubmitting" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                               Color="Color.Error"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => EliminarProducto(detalle))"
+                                                               Title="Eliminar producto"
+                                                               Disabled="@isSubmitting" />
+                                            </MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info" Class="mt-4">
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                                            <MudText>No se han agregado productos a la orden. Agregue al menos un producto para continuar.</MudText>
+                                        </div>
+                                    </MudAlert>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- Resumen -->
+                    @if (detallesOrden?.Any() == true)
+                    {
+                        <MudItem xs="12">
+                            <MudCard Elevation="2" Class="mb-4">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Color="Color.Success">
+                                            <MudIcon Icon="@Icons.Material.Filled.Summarize" Class="mr-2" />
+                                            Resumen de la Orden
+                                        </MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudGrid>
+                                        <MudItem xs="12" sm="4">
+                                            <MudText Typo="Typo.body1"><strong>Total de productos:</strong> @detallesOrden.Count</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="4">
+                                            <MudText Typo="Typo.body1"><strong>Cantidad total:</strong> @detallesOrden.Sum(d => d.CantidadSolicitada ?? 0)</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="4">
+                                            <MudText Typo="Typo.h6" Color="Color.Primary">
+                                                <strong>Total: Q. @CalcularTotalOrden().ToString("N2")</strong>
+                                            </MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+
+                    <!-- Botones de acción -->
+                    <MudItem xs="12">
+                        <MudCard Elevation="1" Class="pa-4">
+                            <div class="d-flex justify-end">
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.Cancel"
+                                           OnClick="Cancelar"
+                                           Class="mr-3"
+                                           Disabled="@isSubmitting">
+                                    Cancelar
+                                </MudButton>
+                                <MudButton ButtonType="ButtonType.Submit"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@(isSubmitting ? Icons.Material.Filled.HourglassEmpty : Icons.Material.Filled.Save)"
+                                           Disabled="@(isSubmitting || !detallesOrden.Any())">
+                                    @if (isSubmitting)
+                                    {
+                                        <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                                        <MudText>Guardando...</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText>@(IdOrden.HasValue ? "Actualizar" : "Crear") Orden</MudText>
+                                    }
+                                </MudButton>
+                            </div>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </EditForm>
+        </MudPaper>
+    }
+</MudContainer>
+
+<!-- Dialog para editar producto -->
+<MudDialog @bind-IsVisible="@mostrarDialogoEditar" Options="@dialogOptions">
+    <TitleContent>
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-3" />
+            <MudText Typo="Typo.h6">Editar Producto</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (detalleEditando != null)
+        {
+            <MudGrid>
+                <MudItem xs="12">
+                    @{
+                        var producto = productos?.FirstOrDefault(p => p.IdProducto == detalleEditando.IdProducto);
+                    }
+                    <MudText Typo="Typo.body1" Class="mb-4">
+                        <strong>Producto:</strong> @(producto?.NombreProducto ?? "Producto no encontrado")
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="cantidadEdicion"
+                                     Label="Cantidad"
+                                     Variant="Variant.Outlined"
+                                     Min="1" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="precioEdicion"
+                                     Label="Precio Unitario"
+                                     Variant="Variant.Outlined"
+                                     Min="0"
+                                     Step="0.01M"
+                                     Format="N2" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body1">
+                        <strong>Subtotal: Q. @((cantidadEdicion * (double)precioEdicion).ToString("N2"))</strong>
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => mostrarDialogoEditar = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="GuardarEdicionProducto">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .custom-table {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+        .custom-table .mud-table-head {
+            background-color: #f8f9fa;
+        }
+
+        .custom-table .mud-table-row:hover {
+            background-color: #f0f7ff;
+            transition: background-color 0.2s ease;
+        }
+
+    .loading-container {
+        height: 50vh;
+        padding: 2rem;
+    }
+
+    .acciones {
+        width: 120px;
+        text-align: center;
+    }
+</style>
+
+@code {
+    [Parameter] public int? IdOrden { get; set; }
+
+    private OrdenFormModel ordenForm = new();
+    private List<Proveedor> proveedores = new();
+    private List<Estado> estados = new();
+    private List<Sucursal> sucursales = new();
+    private List<Producto> productos = new();
+    private List<DetalleOrdenRes> detallesOrden = new();
+
+    private bool loading = true;
+    private bool isSubmitting = false;
+    private DateTime? fechaOrden = DateTime.Now;
+    private DateTime? fechaRecepcion = null;
+    private int? productoSeleccionado = null;
+    private int cantidadProducto = 1;
+    private decimal precioUnitario = 0;
+    private int? estadoAnterior = null;
+
+    // Variables para edición de productos
+    private bool mostrarDialogoEditar = false;
+    private DetalleOrdenRes? detalleEditando = null;
+    private int cantidadEdicion = 1;
+    private decimal precioEdicion = 0;
+    private DialogOptions dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    // Modelo para validaciones
+    public class OrdenFormModel
+    {
+        public string? NumeroOrden { get; set; }
+
+        [Required(ErrorMessage = "El proveedor es requerido")]
+        public int? IdProveedor { get; set; }
+
+        [Required(ErrorMessage = "La sucursal es requerida")]
+        public int? IdSucursal { get; set; }
+
+        [Required(ErrorMessage = "El estado es requerido")]
+        public int? IdEstado { get; set; }
+
+        [StringLength(150, ErrorMessage = "Las observaciones no pueden exceder los 150 caracteres")]
+        public string? Observaciones { get; set; }
+
+        public bool? Aprobada { get; set; } = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadInitialData();
+
+            if (IdOrden.HasValue)
+            {
+                await LoadOrdenForEdit();
+            }
+            else
+            {
+                await SetDefaultValues();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnInitializedAsync: {ex.Message}");
+            Snackbar.Add("Error al cargar los datos del formulario", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadInitialData()
+    {
+        try
+        {
+            Console.WriteLine("Cargando datos iniciales...");
+
+            // Cargar proveedores
+            proveedores = await ProveedorService.GetActiveAsync();
+            Console.WriteLine($"Proveedores cargados: {proveedores.Count}");
+
+            // Cargar sucursales
+            sucursales = await SucursalService.GetAllAsync();
+            Console.WriteLine($"Sucursales cargadas: {sucursales.Count}");
+
+            // Cargar estados
+            estados = await EstadoService.GetAllAsync();
+            Console.WriteLine($"Estados cargados: {estados.Count}");
+
+            // Cargar productos
+            productos = await ProductoService.GetActivosAsync();
+            Console.WriteLine($"Productos cargados: {productos.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos iniciales: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task SetDefaultValues()
+    {
+        try
+        {
+            // Generar número de orden
+            ordenForm.NumeroOrden = await OrdenRestablecimientoService.GenerarNumeroOrdenAsync();
+
+            // Establecer estado por defecto (Pendiente)
+            var estadoPendiente = estados?.FirstOrDefault(e => e.Estado1?.ToLower() == "pendiente");
+            if (estadoPendiente != null)
+            {
+                ordenForm.IdEstado = estadoPendiente.IdEstado;
+                estadoAnterior = estadoPendiente.IdEstado;
+                Console.WriteLine($"Estado por defecto establecido: {estadoPendiente.Estado1}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al establecer valores por defecto: {ex.Message}");
+        }
+    }
+
+    private async Task LoadOrdenForEdit()
+    {
+        try
+        {
+            Console.WriteLine($"Cargando orden para edición - ID: {IdOrden.Value}");
+
+            var orden = await OrdenRestablecimientoService.GetByIdAsync(IdOrden.Value);
+            if (orden != null)
+            {
+                ordenForm.NumeroOrden = orden.NumeroOrden;
+                ordenForm.IdProveedor = orden.IdProveedor;
+                ordenForm.IdSucursal = orden.IdSucursal;
+                ordenForm.IdEstado = orden.IdEstado;
+                ordenForm.Observaciones = orden.Observaciones;
+                ordenForm.Aprobada = orden.Aprobada;
+                fechaOrden = orden.FechaOrden;
+                fechaRecepcion = orden.FechaRecepcion;
+                estadoAnterior = orden.IdEstado;
+
+                Console.WriteLine($"Datos de la orden cargados exitosamente");
+
+                // Cargar detalles
+                var detalles = await DetalleOrdenResService.GetByOrdenIdAsync(IdOrden.Value);
+                if (detalles?.Any() == true)
+                {
+                    detallesOrden.Clear();
+                    detallesOrden.AddRange(detalles);
+                    Console.WriteLine($"Detalles cargados: {detallesOrden.Count} productos");
+                }
+                else
+                {
+                    Console.WriteLine("No se encontraron detalles para la orden");
+                    detallesOrden = new List<DetalleOrdenRes>();
+                }
+
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine("No se encontró la orden");
+                throw new Exception("Orden no encontrada");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar orden para edición: {ex.Message}");
+            throw;
+        }
+    }
+
+    private bool PuedeAgregarProducto()
+    {
+        return productoSeleccionado.HasValue &&
+               cantidadProducto > 0 &&
+               precioUnitario > 0 &&
+               !detallesOrden.Any(d => d.IdProducto == productoSeleccionado.Value);
+    }
+
+    private double CalcularSubtotal()
+    {
+        return cantidadProducto * (double)precioUnitario;
+    }
+
+    private double CalcularTotalOrden()
+    {
+        return detallesOrden.Sum(d => d.Subtotal ?? 0);
+    }
+
+    private void AgregarProducto()
+    {
+        if (PuedeAgregarProducto())
+        {
+            var detalle = new DetalleOrdenRes
+            {
+                IdProducto = productoSeleccionado.Value,
+                CantidadSolicitada = cantidadProducto,
+                PrecioUnitario = (double)precioUnitario,
+                Subtotal = CalcularSubtotal(),
+                IdOrden = IdOrden
+            };
+
+            detallesOrden.Add(detalle);
+
+            // Limpiar selección
+            productoSeleccionado = null;
+            cantidadProducto = 1;
+            precioUnitario = 0;
+
+            Console.WriteLine($"Producto agregado. Total productos: {detallesOrden.Count}");
+            StateHasChanged();
+        }
+    }
+
+    private void EliminarProducto(DetalleOrdenRes detalle)
+    {
+        detallesOrden.Remove(detalle);
+        Console.WriteLine($"Producto eliminado. Total productos: {detallesOrden.Count}");
+        StateHasChanged();
+    }
+
+    private void EditarProducto(DetalleOrdenRes detalle)
+    {
+        detalleEditando = detalle;
+        cantidadEdicion = detalle.CantidadSolicitada ?? 1;
+
+        // Obtener el precio de compra actual del producto
+        var producto = productos?.FirstOrDefault(p => p.IdProducto == detalle.IdProducto);
+        precioEdicion = (decimal)(producto?.PrecioCompra ?? detalle.PrecioUnitario ?? 0);
+
+        mostrarDialogoEditar = true;
+    }
+
+    private void GuardarEdicionProducto()
+    {
+        if (detalleEditando != null)
+        {
+            detalleEditando.CantidadSolicitada = cantidadEdicion;
+            detalleEditando.PrecioUnitario = (double)precioEdicion;
+            detalleEditando.Subtotal = cantidadEdicion * (double)precioEdicion;
+
+            Console.WriteLine($"Producto editado - ID: {detalleEditando.IdProducto}");
+            mostrarDialogoEditar = false;
+            detalleEditando = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnEstadoChanged(int? nuevoEstado)
+    {
+        ordenForm.IdEstado = nuevoEstado;
+
+        // Verificar si se seleccionó el estado "Completado" (ID = 4)
+        if (nuevoEstado == 4)
+        {
+            if (ordenForm.Aprobada == true)
+            {
+                Snackbar.Add("Al guardar con estado 'Completado' y orden aprobada, se actualizarán automáticamente los inventarios", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add("ATENCIÓN: Para actualizar inventarios, la orden debe estar APROBADA y en estado 'Completado'", Severity.Warning);
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OnValidSubmit()
+    {
+        try
+        {
+            if (isSubmitting) return;
+
+            // Validar que haya productos
+            if (!detallesOrden.Any())
+            {
+                Snackbar.Add("Debe agregar al menos un producto a la orden", Severity.Error);
+                return;
+            }
+
+            isSubmitting = true;
+            StateHasChanged();
+
+            // Obtener ID del usuario actual
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst("IdPersona");
+
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                Snackbar.Add("Error: No se pudo obtener el ID del usuario", Severity.Error);
+                return;
+            }
+
+            var orden = new OrdenRestablecimiento
+            {
+                IdOrden = IdOrden ?? 0,
+                NumeroOrden = ordenForm.NumeroOrden,
+                IdProveedor = ordenForm.IdProveedor,
+                IdSucursal = ordenForm.IdSucursal,
+                IdEstado = ordenForm.IdEstado,
+                IdPersonaSolicitud = userId,
+                FechaOrden = fechaOrden,
+                FechaRecepcion = fechaRecepcion,
+                Observaciones = ordenForm.Observaciones,
+                Aprobada = ordenForm.Aprobada,
+                Total = CalcularTotalOrden()
+            };
+
+            bool success;
+
+            if (IdOrden.HasValue)
+            {
+                Console.WriteLine($"Actualizando orden existente - ID: {IdOrden.Value}");
+                success = await OrdenRestablecimientoService.AddUpdateAsync(orden);
+
+                if (success)
+                {
+                    Console.WriteLine("Orden actualizada, actualizando detalles...");
+                    success = await DetalleOrdenResService.UpdateDetallesAsync(IdOrden.Value, detallesOrden);
+
+                    if (success)
+                    {
+                        await ProcessInventoryIfConfirmed(orden);
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Creando nueva orden...");
+                success = await OrdenRestablecimientoService.AddUpdateAsync(orden);
+
+                if (success && orden.IdOrden > 0)
+                {
+                    Console.WriteLine("Orden creada, agregando detalles...");
+
+                    // Actualizar ID de orden en detalles
+                    foreach (var detalle in detallesOrden)
+                    {
+                        detalle.IdOrden = orden.IdOrden;
+                    }
+
+                    success = await DetalleOrdenResService.AddDetallesAsync(detallesOrden);
+
+                    if (success)
+                    {
+                        await ProcessInventoryIfConfirmed(orden);
+                    }
+                }
+            }
+
+            if (success)
+            {
+                Snackbar.Add(IdOrden.HasValue ?
+                    "Orden actualizada exitosamente" : "Orden creada exitosamente",
+                    Severity.Success);
+                NavigationManager.NavigateTo("/ordenes-restablecimiento");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar la orden", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar orden: {ex.Message}");
+            Snackbar.Add("Error al guardar la orden", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ProcessInventoryIfConfirmed(OrdenRestablecimiento orden)
+    {
+        try
+        {
+            // Verificar si el estado es confirmado
+            var estadoConfirmado = estados?.FirstOrDefault(e => e.Estado1?.ToLower() == "confirmado");
+            var estadoAnteriorObj = estados?.FirstOrDefault(e => e.IdEstado == estadoAnterior);
+
+            bool esConfirmado = orden.IdEstado == estadoConfirmado?.IdEstado;
+            bool cambioAConfirmado = esConfirmado && estadoAnterior != estadoConfirmado?.IdEstado;
+
+            if (cambioAConfirmado)
+            {
+                Console.WriteLine("Procesando inventarios - orden marcada como confirmada");
+
+                var processingSuccess = await OrdenRestablecimientoService.ConfirmarOrdenAsync(orden.IdOrden);
+
+                if (processingSuccess)
+                {
+                    Snackbar.Add("Inventarios actualizados correctamente", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Error al actualizar inventarios", Severity.Warning);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al procesar inventarios: {ex.Message}");
+            Snackbar.Add("Error al procesar los inventarios", Severity.Warning);
+        }
+    }
+
+    private void Cancelar()
+    {
+        NavigationManager.NavigateTo("/ordenes-restablecimiento");
+    }
+}

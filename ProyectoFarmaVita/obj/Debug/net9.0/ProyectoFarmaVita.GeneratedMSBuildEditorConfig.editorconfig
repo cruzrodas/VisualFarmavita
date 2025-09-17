@@ -127,6 +127,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNdW5pY2lwaW9cTGlzdGFNdW5pY2lwaW8ucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/OrdenRestablecimiento/CrearEditarRestablecimiento.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xPcmRlblJlc3RhYmxlY2ltaWVudG9cQ3JlYXJFZGl0YXJSZXN0YWJsZWNpbWllbnRvLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/OrdenRestablecimiento/OrdenRestablecimientoLista.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xPcmRlblJlc3RhYmxlY2ltaWVudG9cT3JkZW5SZXN0YWJsZWNpbWllbnRvTGlzdGEucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
