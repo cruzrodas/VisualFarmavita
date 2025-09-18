@@ -1,0 +1,628 @@
+﻿@page "/ventas/factura/{IdFactura:int}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.VentaService
+@using MudBlazor
+
+@inject IVentaService VentaServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-2 pa-md-4">
+    @if (isLoading)
+    {
+        <div class="text-center pa-6">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-3">Cargando factura...</MudText>
+        </div>
+    }
+    else if (factura == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">
+            <MudText>Factura no encontrada.</MudText>
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Header con información de la factura -->
+        <MudPaper Elevation="3" Class="pa-4 pa-md-6 mb-4 rounded-lg factura-header">
+            <MudGrid Spacing="3" AlignItems="AlignItems.Center">
+                <MudItem xs="12" md="6">
+                    <MudStack Spacing="2">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.h3" Color="Color.Primary">
+                                FACTURA #@factura.NumeroFactura
+                            </MudText>
+                        </MudStack>
+
+                        <MudChip T="string" Size="Size.Medium"
+                                 Color="@(EsFacturaAnulada() ? Color.Error : Color.Success)"
+                                 Icon="@(EsFacturaAnulada() ? Icons.Material.Filled.Cancel : Icons.Material.Filled.CheckCircle)">
+                            @(EsFacturaAnulada() ? "ANULADA" : "ACTIVA")
+                        </MudChip>
+                    </MudStack>
+                </MudItem>
+
+                <MudItem xs="12" md="6" Class="text-md-right">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 600;">
+                            Q@(factura.Total?.ToString("F2") ?? "0.00")
+                        </MudText>
+                        <MudText Typo="Typo.body1" Color="Color.Secondary">
+                            @factura.FechaVenta?.ToString("dddd, dd 'de' MMMM 'de' yyyy")
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @factura.FechaVenta?.ToString("HH:mm:ss")
+                        </MudText>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudGrid Spacing="3">
+            <!-- Información del Cliente y Venta -->
+            <MudItem xs="12" lg="8">
+                <!-- Información del Cliente -->
+                <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">Información del Cliente</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (factura.IdClienteNavigation != null)
+                        {
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12" sm="6">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Nombre</MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 500;">
+                                            @factura.IdClienteNavigation.NombreCliente @factura.IdClienteNavigation.ApellidoCliente
+                                        </MudText>
+                                    </MudStack>
+                                </MudItem>
+
+                                @if (!string.IsNullOrEmpty(factura.IdClienteNavigation.NitCliente))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudStack Spacing="1">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">NIT</MudText>
+                                            <MudText Typo="Typo.body1">@factura.IdClienteNavigation.NitCliente</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                }
+
+                                @if (!string.IsNullOrEmpty(factura.IdClienteNavigation.TelefonoCliente))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudStack Spacing="1">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Teléfono</MudText>
+                                            <MudText Typo="Typo.body1">@factura.IdClienteNavigation.TelefonoCliente</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                }
+
+                                @if (!string.IsNullOrEmpty(factura.IdClienteNavigation.EmailCliente))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudStack Spacing="1">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Email</MudText>
+                                            <MudText Typo="Typo.body1">@factura.IdClienteNavigation.EmailCliente</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                }
+
+                                @if (!string.IsNullOrEmpty(factura.IdClienteNavigation.DireccionCliente))
+                                {
+                                    <MudItem xs="12">
+                                        <MudStack Spacing="1">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Dirección</MudText>
+                                            <MudText Typo="Typo.body1">@factura.IdClienteNavigation.DireccionCliente</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                <MudText>Cliente General - Sin información específica</MudText>
+                            </MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Información del Cajero y Caja -->
+                <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.AssignmentInd" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">Información de Venta</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="3">
+                            @if (factura.IdAperturaCajaNavigation?.IdPersonaNavigation != null)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Cajero</MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 500;">
+                                            @factura.IdAperturaCajaNavigation.IdPersonaNavigation.Nombre @factura.IdAperturaCajaNavigation.IdPersonaNavigation.Apellido
+                                        </MudText>
+                                    </MudStack>
+                                </MudItem>
+                            }
+
+                            @if (factura.IdAperturaCajaNavigation?.IdCajaNavigation != null)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Caja</MudText>
+                                        <MudText Typo="Typo.body1">@factura.IdAperturaCajaNavigation.IdCajaNavigation.NombreCaja</MudText>
+                                    </MudStack>
+                                </MudItem>
+                            }
+
+                            <MudItem xs="12" sm="6">
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tipo de Pago</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                        @(factura.IdTipoPagoNavigation?.NombrePago ?? "No definido")
+                                    </MudChip>
+                                </MudStack>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Estado</MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(EsFacturaAnulada() ? Color.Error : Color.Success)">
+                                        @(factura.IdEstadoNavigation?.Estado1 ?? "No definido")
+                                    </MudChip>
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
+
+                        @if (!string.IsNullOrEmpty(factura.Observaciones))
+                        {
+                            <MudDivider Class="my-3" />
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Observaciones</MudText>
+                                <MudText Typo="Typo.body1">@factura.Observaciones</MudText>
+                            </MudStack>
+                        }
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Productos Vendidos -->
+                <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">Productos Vendidos</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Class="pa-0">
+                        @if (detallesFactura.Any())
+                        {
+                            <!-- Vista Desktop -->
+                            <div class="d-none d-md-block">
+                                <MudTable T="FacturaDetalle"
+                                          Items="@detallesFactura"
+                                          Dense="true"
+                                          Hover="true"
+                                          Striped="true">
+                                    <HeaderContent>
+                                        <MudTh>Producto</MudTh>
+                                        <MudTh Style="text-align: center;">Cantidad</MudTh>
+                                        <MudTh Style="text-align: right;">Precio Unit.</MudTh>
+                                        <MudTh Style="text-align: right;">Subtotal</MudTh>
+                                        <MudTh Style="text-align: right;">Impuesto</MudTh>
+                                        <MudTh Style="text-align: right;">Total</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate Context="detalle">
+                                        <MudTd DataLabel="Producto">
+                                            <MudStack Spacing="1">
+                                                <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                                                    @detalle.IdProductoNavigation?.NombreProducto
+                                                </MudText>
+                                                @if (!string.IsNullOrEmpty(detalle.IdProductoNavigation?.DescrpcionProducto))
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                        @detalle.IdProductoNavigation.DescrpcionProducto
+                                                    </MudText>
+                                                }
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                                    @detalle.IdProductoNavigation?.IdCategoriaNavigation?.NombreCategoria
+                                                </MudChip>
+                                            </MudStack>
+                                        </MudTd>
+                                        <MudTd DataLabel="Cantidad" Style="text-align: center;">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                                @detalle.Cantidad
+                                            </MudChip>
+                                        </MudTd>
+                                        <MudTd DataLabel="Precio" Style="text-align: right;">
+                                            <MudText Typo="Typo.body2">Q@(detalle.PrecioUnitario?.ToString("F2") ?? "0.00")</MudText>
+                                        </MudTd>
+                                        <MudTd DataLabel="Subtotal" Style="text-align: right;">
+                                            <MudText Typo="Typo.body2">Q@(detalle.SubTotal?.ToString("F2") ?? "0.00")</MudText>
+                                        </MudTd>
+                                        <MudTd DataLabel="Impuesto" Style="text-align: right;">
+                                            <MudText Typo="Typo.body2">Q@(detalle.Impuesto?.ToString("F2") ?? "0.00")</MudText>
+                                        </MudTd>
+                                        <MudTd DataLabel="Total" Style="text-align: right;">
+                                            <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@(detalle.Total?.ToString("F2") ?? "0.00")</MudText>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </div>
+
+                            <!-- Vista Mobile -->
+                            <div class="d-block d-md-none pa-2">
+                                @foreach (var detalle in detallesFactura)
+                                {
+                                    <MudCard Class="mb-3" Elevation="1">
+                                        <MudCardContent Class="pa-3">
+                                            <MudGrid Spacing="2">
+                                                <MudItem xs="12">
+                                                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">
+                                                        @detalle.IdProductoNavigation?.NombreProducto
+                                                    </MudText>
+                                                    @if (!string.IsNullOrEmpty(detalle.IdProductoNavigation?.DescrpcionProducto))
+                                                    {
+                                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                            @detalle.IdProductoNavigation.DescrpcionProducto
+                                                        </MudText>
+                                                    }
+                                                </MudItem>
+
+                                                <MudItem xs="6">
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Cantidad</MudText>
+                                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@detalle.Cantidad</MudText>
+                                                </MudItem>
+
+                                                <MudItem xs="6" Class="text-right">
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Precio Unit.</MudText>
+                                                    <MudText Typo="Typo.body2">Q@(detalle.PrecioUnitario?.ToString("F2") ?? "0.00")</MudText>
+                                                </MudItem>
+
+                                                <MudItem xs="6">
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Subtotal</MudText>
+                                                    <MudText Typo="Typo.body2">Q@(detalle.SubTotal?.ToString("F2") ?? "0.00")</MudText>
+                                                </MudItem>
+
+                                                <MudItem xs="6" Class="text-right">
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total</MudText>
+                                                    <MudText Typo="Typo.h6" Color="Color.Primary">Q@(detalle.Total?.ToString("F2") ?? "0.00")</MudText>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="pa-4">
+                                <MudAlert Severity="Severity.Warning">
+                                    <MudText>No se encontraron productos en esta factura.</MudText>
+                                </MudAlert>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Sidebar - Resumen y Acciones -->
+            <MudItem xs="12" lg="4">
+                <MudStack Spacing="3">
+                    <!-- Resumen de Totales -->
+                    <MudCard Elevation="3" Class="totals-summary">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" />
+                                    <MudText Typo="Typo.h6">Resumen de Factura</MudText>
+                                </MudStack>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="3">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.body1">Subtotal:</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 500;">Q@(factura.SubTotal?.ToString("F2") ?? "0.00")</MudText>
+                                </MudStack>
+
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.body1">Impuestos:</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 500;">Q@(factura.Impuestos?.ToString("F2") ?? "0.00")</MudText>
+                                </MudStack>
+
+                                @if (factura.Descuento > 0)
+                                {
+                                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.body1">Descuento:</MudText>
+                                        <MudText Typo="Typo.body1" Color="Color.Success" Style="font-weight: 500;">-Q@(factura.Descuento?.ToString("F2") ?? "0.00")</MudText>
+                                    </MudStack>
+                                }
+
+                                <MudDivider />
+
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.h5" Color="Color.Primary">TOTAL:</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 600;">Q@(factura.Total?.ToString("F2") ?? "0.00")</MudText>
+                                </MudStack>
+
+                                <MudDivider />
+
+                                <!-- Estadísticas adicionales -->
+                                <MudGrid Spacing="2">
+                                    <MudItem xs="6">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Color="Color.Info" />
+                                            <MudText Typo="Typo.h6" Color="Color.Info">@detallesFactura.Count</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">Productos</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Numbers" Color="Color.Success" />
+                                            <MudText Typo="Typo.h6" Color="Color.Success">@detallesFactura.Sum(d => d.Cantidad ?? 0)</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">Cantidad Total</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+
+                    <!-- Acciones -->
+                    <MudCard Elevation="2" Class="actions-card">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">Acciones</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="2">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Print"
+                                           OnClick="ImprimirFactura"
+                                           FullWidth="true"
+                                           Size="Size.Large">
+                                    Imprimir Factura
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Info"
+                                           StartIcon="@Icons.Material.Filled.Download"
+                                           OnClick="DescargarPDF"
+                                           FullWidth="true">
+                                    Descargar PDF
+                                </MudButton>
+
+                                @if (!EsFacturaAnulada())
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Error"
+                                               StartIcon="@Icons.Material.Filled.Cancel"
+                                               OnClick="ConfirmarAnularFactura"
+                                               FullWidth="true">
+                                        Anular Factura
+                                    </MudButton>
+                                }
+
+                                <MudDivider />
+
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.ArrowBack"
+                                           OnClick="@(() => NavigationManager.NavigateTo("/ventas"))"
+                                           FullWidth="true">
+                                    Volver a Ventas
+                                </MudButton>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+<!-- Estilos CSS -->
+<style>
+    .rounded-lg {
+        border-radius: 12px !important;
+    }
+
+    .factura-header {
+        background: linear-gradient(135deg, var(--mud-palette-primary-lighten) 0%, var(--mud-palette-background) 100%);
+        border-left: 6px solid var(--mud-palette-primary);
+    }
+
+    .totals-summary {
+        background: linear-gradient(135deg, var(--mud-palette-success-lighten) 0%, var(--mud-palette-background) 100%);
+        border-radius: 12px;
+        border-left: 6px solid var(--mud-palette-success);
+    }
+
+    .actions-card {
+        border-radius: 8px;
+    }
+
+    @@media (max-width: 959px) {
+        .factura-header .mud-grid-item:last-child
+
+    {
+        text-align: left !important;
+    }
+
+    }
+
+    @@media print {
+        .actions-card
+
+    {
+        display: none !important;
+    }
+
+    .factura-header {
+        background: white !important;
+        box-shadow: none !important;
+    }
+
+    .mud-paper {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+
+    }
+</style>
+
+@code {
+    [Parameter] public int IdFactura { get; set; }
+
+    private Factura? factura = null;
+    private List<FacturaDetalle> detallesFactura = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadFacturaDetails();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar factura: {ex.Message}");
+            Snackbar.Add("Error al cargar la factura", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFacturaDetails()
+    {
+        try
+        {
+            factura = await VentaServices.ObtenerFacturaPorIdAsync(IdFactura);
+
+            if (factura != null)
+            {
+                detallesFactura = await VentaServices.ObtenerDetallesFacturaAsync(IdFactura);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en LoadFacturaDetails: {ex.Message}");
+            throw;
+        }
+    }
+
+    private bool EsFacturaAnulada()
+    {
+        return factura?.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") == true;
+    }
+
+    private async Task ImprimirFactura()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.print");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al imprimir: {ex.Message}");
+            Snackbar.Add("Error al imprimir la factura", Severity.Error);
+        }
+    }
+
+    private async Task DescargarPDF()
+    {
+        try
+        {
+            // Aquí implementarías la lógica para generar y descargar el PDF
+            // Por ahora solo mostramos un mensaje
+            Snackbar.Add("Funcionalidad de descarga PDF pendiente de implementar", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al descargar PDF: {ex.Message}");
+            Snackbar.Add("Error al descargar PDF", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmarAnularFactura()
+    {
+        if (factura == null) return;
+
+        try
+        {
+            var message = $"¿Está seguro que desea anular la factura #{factura.NumeroFactura}?\n\n";
+            message += $"Total: Q{factura.Total:F2}\n";
+            message += $"Fecha: {factura.FechaVenta?.ToString("dd/MM/yyyy HH:mm")}\n\n";
+            message += "Esta acción no se puede deshacer y restaurará el inventario.\n\n";
+            message += "Ingrese el motivo de la anulación:";
+
+            var result = await DialogService.ShowMessageBox(
+                "Confirmar Anulación de Factura",
+                message,
+                yesText: "Anular",
+                cancelText: "Cancelar");
+
+            if (result == true)
+            {
+                await AnularFactura();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en confirmación: {ex.Message}");
+            Snackbar.Add("Error al procesar la confirmación", Severity.Error);
+        }
+    }
+
+    private async Task AnularFactura()
+    {
+        try
+        {
+            // Por simplicidad, usamos un motivo predeterminado
+            // En una implementación real, mostrarías un diálogo para ingresar el motivo
+            var motivo = $"Anulación solicitada desde detalle de factura - {DateTime.Now:dd/MM/yyyy HH:mm}";
+
+            var resultado = await VentaServices.AnularFacturaAsync(IdFactura, motivo);
+
+            if (resultado)
+            {
+                Snackbar.Add("Factura anulada correctamente", Severity.Success);
+                await LoadFacturaDetails(); // Recargar para mostrar el estado actualizado
+            }
+            else
+            {
+                Snackbar.Add("Error al anular la factura", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al anular factura: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

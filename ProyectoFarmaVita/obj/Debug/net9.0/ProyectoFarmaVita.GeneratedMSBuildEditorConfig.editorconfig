@@ -187,6 +187,18 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUdXJub1RyYWJham9QYWdlc1xMaXN0YWRvVHJ1bm9zVHJhYmFqby5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Ventas/Detalle Factura.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWZW50YXNcRGV0YWxsZSBGYWN0dXJhLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Ventas/NuevaVenta.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWZW50YXNcTnVldmFWZW50YS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Ventas/VentasLista.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWZW50YXNcVmVudGFzTGlzdGEucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Weather.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWF0aGVyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 

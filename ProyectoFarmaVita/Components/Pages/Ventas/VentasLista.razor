@@ -1,0 +1,493 @@
+﻿@page "/ventas"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.VentaService
+@using ProyectoFarmaVita.Services.PersonaServices
+@using MudBlazor
+
+@inject IVentaService VentaServices
+@inject IPersonaService PersonaServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">Gestión de Ventas</h3>
+<a href="/ventas/nueva" class="btn btn-primary mt-2">Nueva Venta</a>
+
+<br />
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">Historial de Ventas</MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="3">
+            <MudTextField T="string" Label="Buscar"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search"
+                          Placeholder="Cliente, cajero..." />
+        </MudItem>
+
+        <MudItem xs="12" sm="3">
+            <MudSelect T="int?"
+                       Label="Filtrar por Cajero"
+                       @bind-Value="selectedPersonaId"
+                       Variant="Variant.Outlined"
+                       Clearable="true"
+                       OnClearButtonClick="ClearPersonaFilter">
+                <MudSelectItem Value="@((int?)null)">Todos los cajeros</MudSelectItem>
+                @if (personas != null)
+                {
+                    @foreach (var persona in personas)
+                    {
+                        <MudSelectItem Value="@((int?)persona.IdPersona)">@($"{persona.Nombre} {persona.Apellido}")</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="3">
+            <MudDatePicker Label="Fecha Inicio"
+                           @bind-Date="fechaInicio"
+                           Variant="Variant.Outlined"
+                           DateFormat="dd/MM/yyyy"
+                           Clearable="true" />
+        </MudItem>
+
+        <MudItem xs="12" sm="3">
+            <MudDatePicker Label="Fecha Fin"
+                           @bind-Date="fechaFin"
+                           Variant="Variant.Outlined"
+                           DateFormat="dd/MM/yyyy"
+                           Clearable="true" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Filtrar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" Class="d-flex align-center justify-end">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Assessment"
+                       OnClick="VerEstadisticasHoy">
+                Estadísticas del Día
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (ventas == null || !ventas.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">
+            @if (string.IsNullOrEmpty(searchArea) && !selectedPersonaId.HasValue && !fechaInicio.HasValue && !fechaFin.HasValue)
+            {
+                <MudText>No hay ventas registradas en el sistema.</MudText>
+            }
+            else
+            {
+                <MudText>No se encontraron ventas que coincidan con los filtros aplicados.</MudText>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable T="Factura"
+                  Items="@ventas"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>Factura #</MudTh>
+                <MudTh>Fecha</MudTh>
+                <MudTh>Cliente</MudTh>
+                <MudTh>Cajero</MudTh>
+                <MudTh>Tipo Pago</MudTh>
+                <MudTh>Total</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Factura #">
+                    <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                        @context.NumeroFactura
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Fecha">
+                    @if (context.FechaVenta.HasValue)
+                    {
+                        <MudText Typo="Typo.body2">@context.FechaVenta.Value.ToString("dd/MM/yyyy")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.FechaVenta.Value.ToString("HH:mm")</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin fecha</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Cliente">
+                    @if (context.IdClienteNavigation != null)
+                    {
+                        <MudText Typo="Typo.body2">@($"{context.IdClienteNavigation.NombreCliente} {context.IdClienteNavigation.ApellidoCliente}")</MudText>
+                        @if (!string.IsNullOrEmpty(context.IdClienteNavigation.NitCliente))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">NIT: @context.IdClienteNavigation.NitCliente</MudText>
+                        }
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Cliente general</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Cajero">
+                    @if (context.IdAperturaCajaNavigation?.IdPersonaNavigation != null)
+                    {
+                        <MudText Typo="Typo.body2">@($"{context.IdAperturaCajaNavigation.IdPersonaNavigation.Nombre} {context.IdAperturaCajaNavigation.IdPersonaNavigation.Apellido}")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.IdAperturaCajaNavigation.IdCajaNavigation?.NombreCaja</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin cajero</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tipo Pago">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                        @(context.IdTipoPagoNavigation?.NombrePago ?? "No definido")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Total">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">
+                        Q@(context.Total?.ToString("F2") ?? "0.00")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    @{
+                        var esAnulada = context.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") == true;
+                    }
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(esAnulada ? Color.Error : Color.Success)"
+                             Icon="@(esAnulada ? Icons.Material.Filled.Cancel : Icons.Material.Filled.CheckCircle)">
+                        @(esAnulada ? "Anulada" : "Activa")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-flex gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       Title="Ver detalles"
+                                       OnClick="@(() => VerDetallesFactura(context.IdFactura))" />
+
+                        <MudIconButton Icon="@Icons.Material.Filled.Print"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Title="Imprimir factura"
+                                       OnClick="@(() => ImprimirFactura(context.IdFactura))" />
+
+                        @{
+                            var esAnulada = context.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") == true;
+                        }
+                        @if (!esAnulada)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           Title="Anular factura"
+                                           OnClick="@(() => ConfirmAnularFactura(context))" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <!-- Resumen al final de la tabla -->
+        @if (ventas.Any())
+        {
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="3">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Ventas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">@ventas.Count</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Ventas Activas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Success">@ventasActivas</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Ventas Anuladas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Error">@ventasAnuladas</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Monto Total</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">Q@montoTotal.ToString("F2")</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        }
+    }
+
+</MudPaper>
+
+@code {
+    private List<Factura> ventas = new();
+    private List<Persona> personas = new();
+    private bool isLoading = false;
+    private string searchArea = "";
+    private int? selectedPersonaId = null;
+    private DateTime? fechaInicio = null;
+    private DateTime? fechaFin = null;
+
+    // Variables para el resumen
+    private int ventasActivas = 0;
+    private int ventasAnuladas = 0;
+    private double montoTotal = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdownData();
+        await LoadVentas();
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            personas = await PersonaServices.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar personas: {ex.Message}");
+        }
+    }
+
+    private async Task LoadVentas()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            ventas = await VentaServices.ObtenerHistorialVentasAsync(
+                selectedPersonaId,
+                fechaInicio,
+                fechaFin);
+
+            // Aplicar filtro de búsqueda
+            if (!string.IsNullOrEmpty(searchArea))
+            {
+                ventas = ventas.Where(v =>
+                    (v.IdClienteNavigation != null &&
+                     (v.IdClienteNavigation.NombreCliente.Contains(searchArea, StringComparison.OrdinalIgnoreCase) ||
+                      v.IdClienteNavigation.ApellidoCliente.Contains(searchArea, StringComparison.OrdinalIgnoreCase) ||
+                      v.IdClienteNavigation.NitCliente.Contains(searchArea, StringComparison.OrdinalIgnoreCase))) ||
+                    (v.IdAperturaCajaNavigation?.IdPersonaNavigation != null &&
+                     (v.IdAperturaCajaNavigation.IdPersonaNavigation.Nombre.Contains(searchArea, StringComparison.OrdinalIgnoreCase) ||
+                      v.IdAperturaCajaNavigation.IdPersonaNavigation.Apellido.Contains(searchArea, StringComparison.OrdinalIgnoreCase))) ||
+                    v.NumeroFactura.ToString().Contains(searchArea)
+                ).ToList();
+            }
+
+            CalcularResumen();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar ventas: {ex.Message}");
+            Snackbar.Add("Error al cargar las ventas", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CalcularResumen()
+    {
+        ventasActivas = ventas.Count(v => v.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") != true);
+        ventasAnuladas = ventas.Count(v => v.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") == true);
+        montoTotal = ventas.Where(v => v.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") != true)
+                          .Sum(v => v.Total ?? 0);
+    }
+
+    private async Task Search()
+    {
+        await LoadVentas();
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadVentas();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        selectedPersonaId = null;
+        fechaInicio = null;
+        fechaFin = null;
+        await LoadVentas();
+    }
+
+    private async Task ClearPersonaFilter()
+    {
+        selectedPersonaId = null;
+        await LoadVentas();
+    }
+
+    private async Task VerEstadisticasHoy()
+    {
+        // Para obtener estadísticas necesitamos un ID de persona
+        // Por simplicidad, mostraremos las estadísticas generales del día
+        try
+        {
+            var hoy = DateTime.Today;
+            var ventasHoy = ventas.Where(v =>
+                v.FechaVenta.HasValue &&
+                v.FechaVenta.Value.Date == hoy &&
+                v.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") != true)
+                .ToList();
+
+            var message = $"Estadísticas del día {hoy:dd/MM/yyyy}:\n\n";
+            message += $"• Total de ventas: {ventasHoy.Count}\n";
+            message += $"• Monto total: Q{ventasHoy.Sum(v => v.Total ?? 0):F2}\n";
+            message += $"• Venta promedio: Q{(ventasHoy.Any() ? ventasHoy.Average(v => v.Total ?? 0) : 0):F2}\n";
+            message += $"• Venta más alta: Q{(ventasHoy.Any() ? ventasHoy.Max(v => v.Total ?? 0) : 0):F2}";
+
+            await DialogService.ShowMessageBox("Estadísticas del Día", message, yesText: "Cerrar");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar estadísticas: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task VerDetallesFactura(int idFactura)
+    {
+        try
+        {
+            var factura = await VentaServices.ObtenerFacturaPorIdAsync(idFactura);
+            var detalles = await VentaServices.ObtenerDetallesFacturaAsync(idFactura);
+
+            if (factura == null)
+            {
+                Snackbar.Add("Factura no encontrada", Severity.Error);
+                return;
+            }
+
+            var message = $"FACTURA #{factura.NumeroFactura}\n";
+            message += $"Fecha: {factura.FechaVenta?.ToString("dd/MM/yyyy HH:mm")}\n";
+            message += $"Cliente: {factura.IdClienteNavigation?.NombreCliente} {factura.IdClienteNavigation?.ApellidoCliente}\n";
+            message += $"Cajero: {factura.IdAperturaCajaNavigation?.IdPersonaNavigation?.Nombre} {factura.IdAperturaCajaNavigation?.IdPersonaNavigation?.Apellido}\n\n";
+
+            message += "PRODUCTOS:\n";
+            foreach (var detalle in detalles)
+            {
+                message += $"• {detalle.IdProductoNavigation?.NombreProducto}\n";
+                message += $"  Cantidad: {detalle.Cantidad} x Q{detalle.PrecioUnitario:F2} = Q{detalle.Total:F2}\n";
+            }
+
+            message += $"\nSubtotal: Q{factura.SubTotal:F2}\n";
+            message += $"Impuestos: Q{factura.Impuestos:F2}\n";
+            message += $"Descuento: Q{factura.Descuento:F2}\n";
+            message += $"TOTAL: Q{factura.Total:F2}";
+
+            await DialogService.ShowMessageBox("Detalles de Factura", message, yesText: "Cerrar");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar detalles: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ImprimirFactura(int idFactura)
+    {
+        try
+        {
+            // Aquí implementarías la lógica de impresión
+            // Por ahora solo mostraremos un mensaje
+            Snackbar.Add("Funcionalidad de impresión pendiente de implementar", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al imprimir: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmAnularFactura(Factura factura)
+    {
+        var message = $"¿Está seguro que desea anular la factura #{factura.NumeroFactura}?\n\n";
+        message += $"Cliente: {factura.IdClienteNavigation?.NombreCliente} {factura.IdClienteNavigation?.ApellidoCliente}\n";
+        message += $"Total: Q{factura.Total:F2}\n";
+        message += $"Fecha: {factura.FechaVenta?.ToString("dd/MM/yyyy HH:mm")}\n\n";
+        message += "Esta acción no se puede deshacer y restaurará el inventario.";
+
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Anulación",
+            message,
+            yesText: "Anular Factura",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            // Solicitar motivo de anulación
+            await SolicitarMotivoAnulacion(factura.IdFactura);
+        }
+    }
+
+    private async Task SolicitarMotivoAnulacion(int idFactura)
+    {
+        try
+        {
+            // Por simplicidad, usamos un motivo predeterminado
+            // En una implementación real, mostrarías un diálogo para ingresar el motivo
+            var motivo = "Anulación solicitada por el usuario";
+
+            var resultado = await VentaServices.AnularFacturaAsync(idFactura, motivo);
+
+            if (resultado)
+            {
+                Snackbar.Add("Factura anulada correctamente", Severity.Success);
+                await LoadVentas(); // Recargar la lista
+            }
+            else
+            {
+                Snackbar.Add("Error al anular la factura", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

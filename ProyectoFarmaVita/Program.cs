@@ -9,6 +9,7 @@ using ProyectoFarmaVita.Services.AuthorizationServices;
 using ProyectoFarmaVita.Services.CajaServices;
 using ProyectoFarmaVita.Services.CategoriaProductoService;
 using ProyectoFarmaVita.Services.CategoriaServices;
+using ProyectoFarmaVita.Services.ClienteServices;
 using ProyectoFarmaVita.Services.DepartamentoServices;
 using ProyectoFarmaVita.Services.DetalleOrdenResServices;
 using ProyectoFarmaVita.Services.DireccionServices;
@@ -26,9 +27,11 @@ using ProyectoFarmaVita.Services.ProductoServices;
 using ProyectoFarmaVita.Services.ProveedorServices;
 using ProyectoFarmaVita.Services.SucursalServices;
 using ProyectoFarmaVita.Services.TelefonoServices;
+using ProyectoFarmaVita.Services.TipoPagoServices;
 using ProyectoFarmaVita.Services.TrasladoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoService;
 using ProyectoFarmaVita.Services.TurnoTrabajoServices;
+using ProyectoFarmaVita.Services.VentaService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -73,6 +76,9 @@ builder.Services.AddScoped<ICajaService, CajaService>();
 builder.Services.AddScoped<IAperturaCajaService, AperturaCajaService>();
 builder.Services.AddScoped<IDetalleOrdenResService, SDetalleOrdenResService>();
 builder.Services.AddScoped<IOrdenRestablecimientoService, SOrdenRestablecimientoService>();
+builder.Services.AddScoped<IVentaService, SVentaService>();
+builder.Services.AddScoped<IClienteService, ClienteService>();
+builder.Services.AddScoped<ITipoPagoService, TipoPagoService>();
 
 
 
