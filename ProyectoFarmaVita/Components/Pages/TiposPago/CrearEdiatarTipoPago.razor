@@ -1,0 +1,349 @@
+﻿@page "/tipos-pago/agregar"
+@page "/tipos-pago/agregar/{IdTipoPago:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.TipoPagoServices
+@using MudBlazor
+@using System.ComponentModel.DataAnnotations
+
+@inject ITipoPagoService TipoPagoServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">@(IdTipoPago.HasValue ? "Editar Tipo de Pago" : "Nuevo Tipo de Pago")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdTipoPago.HasValue ? "Editar Tipo de Pago" : "Agregar Nuevo Tipo de Pago")
+    </MudText>
+
+    <EditForm Model="tipoPagoForm" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid Justify="Justify.Center">
+            <!-- Información del Tipo de Pago -->
+            <MudItem xs="12" md="8" lg="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@GetTipoPagoIcon(tipoPagoForm.NombrePago)" 
+                                         Color="@GetTipoPagoColor(tipoPagoForm.NombrePago)" 
+                                         Size="Size.Medium" />
+                                <MudText Typo="Typo.h6">Información del Tipo de Pago</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudStack Spacing="3">
+                            <MudTextField Label="Nombre del Tipo de Pago"
+                                          @bind-Value="tipoPagoForm.NombrePago"
+                                          For="@(() => tipoPagoForm.NombrePago)"
+                                          Variant="Variant.Outlined"
+                                          Required="true"
+                                          RequiredError="El nombre del tipo de pago es requerido"
+                                          MaxLength="50"
+                                          Counter="50"
+                                          Immediate="true"
+                                          OnBlur="ValidateNombreTipoPago"
+                                          HelperText="Ingrese un nombre descriptivo para el tipo de pago"
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@GetTipoPagoIcon(tipoPagoForm.NombrePago)"
+                                          AdornmentColor="@GetTipoPagoColor(tipoPagoForm.NombrePago)" />
+
+                            @if (!string.IsNullOrEmpty(nombreValidationMessage))
+                            {
+                                <MudAlert Severity="Severity.Error" Dense="true">
+                                    @nombreValidationMessage
+                                </MudAlert>
+                            }
+
+                            <!-- Vista previa del tipo de pago -->
+                            @if (!string.IsNullOrEmpty(tipoPagoForm.NombrePago))
+                            {
+                                <MudDivider />
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Vista Previa</MudText>
+                                    <MudPaper Class="pa-3" Elevation="1" Style="background-color: var(--mud-palette-background-grey);">
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@GetTipoPagoIcon(tipoPagoForm.NombrePago)" 
+                                                     Color="@GetTipoPagoColor(tipoPagoForm.NombrePago)" 
+                                                     Size="Size.Medium" />
+                                            <MudText Typo="Typo.body1" Style="font-weight: 500;">
+                                                @tipoPagoForm.NombrePago
+                                            </MudText>
+                                            <MudChip T="string" Size="Size.Small" 
+                                                     Color="@GetTipoPagoColor(tipoPagoForm.NombrePago)">
+                                                @GetTipoPagoCategoria(tipoPagoForm.NombrePago)
+                                            </MudChip>
+                                        </MudStack>
+                                    </MudPaper>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Sugerencias de tipos de pago comunes -->
+            @if (!IdTipoPago.HasValue)
+            {
+                <MudItem xs="12" md="8" lg="6">
+                    <MudCard Elevation="1">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Color="Color.Warning" />
+                                    <MudText Typo="Typo.h6">Sugerencias</MudText>
+                                </MudStack>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Haga clic en cualquiera de estas opciones para usar como plantilla:
+                            </MudText>
+                            <MudStack Spacing="2">
+                                @foreach (var sugerencia in sugerenciasTiposPago)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="@GetTipoPagoColor(sugerencia)"
+                                               StartIcon="@GetTipoPagoIcon(sugerencia)"
+                                               OnClick="@(() => UsarSugerencia(sugerencia))"
+                                               FullWidth="true"
+                                               Class="justify-start">
+                                        @sugerencia
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <div class="d-flex justify-content-between mt-6">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/tipos-pago"))"
+                       Size="Size.Large">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@(isSubmitting || !string.IsNullOrEmpty(nombreValidationMessage))"
+                       Size="Size.Large">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdTipoPago.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdTipoPago { get; set; }
+
+    private TipoPagoFormModel tipoPagoForm = new TipoPagoFormModel();
+    private bool isSubmitting = false;
+    private string nombreValidationMessage = "";
+
+    // Sugerencias de tipos de pago comunes
+    private readonly List<string> sugerenciasTiposPago = new()
+    {
+        "Efectivo",
+        "Tarjeta de Crédito",
+        "Tarjeta de Débito",
+        "Transferencia Bancaria",
+        "Cheque",
+        "Pago Digital",
+        "Crédito"
+    };
+
+    // Modelo para el formulario con validaciones
+    public class TipoPagoFormModel
+    {
+        [Required(ErrorMessage = "El nombre del tipo de pago es requerido")]
+        [StringLength(50, ErrorMessage = "El nombre no puede exceder los 50 caracteres")]
+        public string NombrePago { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (IdTipoPago.HasValue)
+            {
+                try
+                {
+                    var tipoPago = await TipoPagoServices.GetByIdAsync(IdTipoPago.Value);
+                    if (tipoPago != null)
+                    {
+                        tipoPagoForm.NombrePago = tipoPago.NombrePago ?? "";
+                    }
+                    else
+                    {
+                        Snackbar.Add("Tipo de pago no encontrado", Severity.Error);
+                        NavigationManager.NavigateTo("/tipos-pago");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error al cargar el tipo de pago: {ex.Message}", Severity.Error);
+                    NavigationManager.NavigateTo("/tipos-pago");
+                }
+            }
+            else
+            {
+                tipoPagoForm = new TipoPagoFormModel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ValidateNombreTipoPago()
+    {
+        nombreValidationMessage = "";
+
+        if (!string.IsNullOrEmpty(tipoPagoForm.NombrePago))
+        {
+            try
+            {
+                var exists = await TipoPagoServices.ExisteTipoPagoConNombreAsync(tipoPagoForm.NombrePago, IdTipoPago);
+                if (exists)
+                {
+                    nombreValidationMessage = "Ya existe un tipo de pago con este nombre";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en validación: {ex.Message}");
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void UsarSugerencia(string sugerencia)
+    {
+        tipoPagoForm.NombrePago = sugerencia;
+        nombreValidationMessage = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validaciones previas
+            if (string.IsNullOrEmpty(tipoPagoForm.NombrePago?.Trim()))
+            {
+                Snackbar.Add("El nombre del tipo de pago es requerido", Severity.Warning);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(nombreValidationMessage))
+            {
+                Snackbar.Add("Corrija los errores de validación antes de continuar", Severity.Warning);
+                return;
+            }
+
+            // Mapear datos del formulario al modelo
+            var tipoPago = new TipoPago();
+            
+            if (IdTipoPago.HasValue)
+            {
+                tipoPago.IdTipoPago = IdTipoPago.Value;
+            }
+
+            tipoPago.NombrePago = tipoPagoForm.NombrePago?.Trim();
+
+            var result = await TipoPagoServices.AddUpdateAsync(tipoPago);
+
+            if (result)
+            {
+                var message = IdTipoPago.HasValue ? "Tipo de pago actualizado correctamente" : "Tipo de pago creado correctamente";
+                Snackbar.Add(message, Severity.Success);
+                NavigationManager.NavigateTo("/tipos-pago");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar el tipo de pago", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"💥 Error en HandleSubmit: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetTipoPagoIcon(string? nombrePago)
+    {
+        if (string.IsNullOrEmpty(nombrePago)) return Icons.Material.Filled.Payment;
+
+        return nombrePago.ToLower() switch
+        {
+            var name when name.Contains("efectivo") => Icons.Material.Filled.Money,
+            var name when name.Contains("tarjeta") => Icons.Material.Filled.CreditCard,
+            var name when name.Contains("transferencia") => Icons.Material.Filled.SwapHoriz,
+            var name when name.Contains("cheque") => Icons.Material.Filled.RequestQuote,
+            var name when name.Contains("digital") => Icons.Material.Filled.QrCode,
+            var name when name.Contains("credito") => Icons.Material.Filled.CreditScore,
+            _ => Icons.Material.Filled.Payment
+        };
+    }
+
+    private Color GetTipoPagoColor(string? nombrePago)
+    {
+        if (string.IsNullOrEmpty(nombrePago)) return Color.Default;
+
+        return nombrePago.ToLower() switch
+        {
+            var name when name.Contains("efectivo") => Color.Success,
+            var name when name.Contains("tarjeta") => Color.Info,
+            var name when name.Contains("transferencia") => Color.Primary,
+            var name when name.Contains("cheque") => Color.Warning,
+            var name when name.Contains("digital") => Color.Secondary,
+            var name when name.Contains("credito") => Color.Tertiary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetTipoPagoCategoria(string? nombrePago)
+    {
+        if (string.IsNullOrEmpty(nombrePago)) return "General";
+
+        return nombrePago.ToLower() switch
+        {
+            var name when name.Contains("efectivo") => "Efectivo",
+            var name when name.Contains("tarjeta") => "Tarjeta",
+            var name when name.Contains("transferencia") => "Transferencia",
+            var name when name.Contains("cheque") => "Cheque",
+            var name when name.Contains("digital") => "Digital",
+            var name when name.Contains("credito") => "Crédito",
+            _ => "Otro"
+        };
+    }
+}

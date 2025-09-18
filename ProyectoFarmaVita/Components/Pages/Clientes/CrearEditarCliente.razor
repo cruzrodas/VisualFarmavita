@@ -1,0 +1,415 @@
+﻿@page "/clientes/agregar"
+@page "/clientes/agregar/{IdCliente:int?}"
+
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.ClienteServices
+@using MudBlazor
+@using System.ComponentModel.DataAnnotations
+
+@inject IClienteService ClienteServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">@(IdCliente.HasValue ? "Editar Cliente" : "Nuevo Cliente")</h3>
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4 text-center" Align="Align.Center">
+        @(IdCliente.HasValue ? "Editar Cliente" : "Agregar Nuevo Cliente")
+    </MudText>
+
+    <EditForm Model="clienteForm" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <!-- Información Básica -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">Información Personal</MudText>
+                <MudDivider />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Nombre"
+                              @bind-Value="clienteForm.NombreCliente"
+                              For="@(() => clienteForm.NombreCliente)"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="El nombre es requerido"
+                              MaxLength="200"
+                              Counter="200" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Apellido"
+                              @bind-Value="clienteForm.ApellidoCliente"
+                              For="@(() => clienteForm.ApellidoCliente)"
+                              Variant="Variant.Outlined"
+                              MaxLength="200"
+                              Counter="200" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string"
+                           Label="Tipo de Cliente"
+                           @bind-Value="clienteForm.TipoCliente"
+                           For="@(() => clienteForm.TipoCliente)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Debe seleccionar el tipo de cliente">
+                    <MudSelectItem Value="@("Individual")">Individual</MudSelectItem>
+                    <MudSelectItem Value="@("Empresa")">Empresa</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+    <MudCheckBox T="bool" 
+                 @bind-Checked="clienteForm.EsClienteFrecuente"
+                 Label="Cliente Frecuente"
+                 Color="Color.Primary" />
+</MudItem>
+
+            <!-- Información de Empresa (solo si es empresa) -->
+            @if (clienteForm.TipoCliente == "Empresa")
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Información de Empresa</MudText>
+                    <MudDivider />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Razón Social"
+                                  @bind-Value="clienteForm.RazonSocial"
+                                  For="@(() => clienteForm.RazonSocial)"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="300"
+                                  Counter="300" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Nombre de Contacto"
+                                  @bind-Value="clienteForm.NombreContacto"
+                                  For="@(() => clienteForm.NombreContacto)"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="200"
+                                  Counter="200" />
+                </MudItem>
+            }
+
+            <!-- Documentos de Identificación -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mt-4 mb-2">Documentos de Identificación</MudText>
+                <MudDivider />
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudTextField Label="NIT"
+                              @bind-Value="clienteForm.NitCliente"
+                              For="@(() => clienteForm.NitCliente)"
+                              Variant="Variant.Outlined"
+                              MaxLength="20"
+                              OnBlur="ValidateNit"
+                              HelperText="Número de Identificación Tributaria" />
+                @if (!string.IsNullOrEmpty(nitValidationMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                        @nitValidationMessage
+                    </MudAlert>
+                }
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudNumericField T="long?"
+                                 Label="DPI"
+                                 @bind-Value="clienteForm.DpiCliente"
+                                 For="@(() => clienteForm.DpiCliente)"
+                                 Variant="Variant.Outlined"
+                                 OnBlur="ValidateDpi"
+                                 HelperText="Documento Personal de Identificación" />
+                @if (!string.IsNullOrEmpty(dpiValidationMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                        @dpiValidationMessage
+                    </MudAlert>
+                }
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudTextField Label="RTU"
+                              @bind-Value="clienteForm.RtuCliente"
+                              For="@(() => clienteForm.RtuCliente)"
+                              Variant="Variant.Outlined"
+                              MaxLength="50"
+                              HelperText="Registro Tributario Unificado" />
+            </MudItem>
+
+            <!-- Información de Contacto -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mt-4 mb-2">Información de Contacto</MudText>
+                <MudDivider />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Teléfono"
+                              @bind-Value="clienteForm.TelefonoCliente"
+                              For="@(() => clienteForm.TelefonoCliente)"
+                              Variant="Variant.Outlined"
+                              MaxLength="15"
+                              HelperText="Número de teléfono de contacto" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Email"
+                              @bind-Value="clienteForm.EmailCliente"
+                              For="@(() => clienteForm.EmailCliente)"
+                              Variant="Variant.Outlined"
+                              MaxLength="100"
+                              InputType="InputType.Email"
+                              HelperText="Correo electrónico" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Dirección"
+                              @bind-Value="clienteForm.DireccionCliente"
+                              For="@(() => clienteForm.DireccionCliente)"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              MaxLength="300"
+                              Counter="300"
+                              HelperText="Dirección completa del cliente" />
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-content-between mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/clientes"))">
+                Regresar
+            </MudButton>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="@(isSubmitting || !string.IsNullOrEmpty(nitValidationMessage) || !string.IsNullOrEmpty(dpiValidationMessage))">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Guardando...</MudText>
+                }
+                else
+                {
+                    <MudText>@(IdCliente.HasValue ? "Actualizar" : "Guardar")</MudText>
+                }
+            </MudButton>
+        </div>
+
+    </EditForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int? IdCliente { get; set; }
+
+    private ClienteFormModel clienteForm = new ClienteFormModel();
+    private bool isSubmitting = false;
+    private string nitValidationMessage = "";
+    private string dpiValidationMessage = "";
+
+    // Modelo para el formulario con validaciones
+    public class ClienteFormModel
+    {
+        [Required(ErrorMessage = "El nombre es requerido")]
+        [StringLength(200, ErrorMessage = "El nombre no puede exceder los 200 caracteres")]
+        public string NombreCliente { get; set; } = "";
+
+        [StringLength(200, ErrorMessage = "El apellido no puede exceder los 200 caracteres")]
+        public string? ApellidoCliente { get; set; }
+
+        [StringLength(20, ErrorMessage = "El NIT no puede exceder los 20 caracteres")]
+        public string? NitCliente { get; set; }
+
+        public long? DpiCliente { get; set; }
+
+        [StringLength(50, ErrorMessage = "El RTU no puede exceder los 50 caracteres")]
+        public string? RtuCliente { get; set; }
+
+        [StringLength(15, ErrorMessage = "El teléfono no puede exceder los 15 caracteres")]
+        public string? TelefonoCliente { get; set; }
+
+        [EmailAddress(ErrorMessage = "Formato de email inválido")]
+        [StringLength(100, ErrorMessage = "El email no puede exceder los 100 caracteres")]
+        public string? EmailCliente { get; set; }
+
+        [StringLength(300, ErrorMessage = "La dirección no puede exceder los 300 caracteres")]
+        public string? DireccionCliente { get; set; }
+
+        [Required(ErrorMessage = "Debe seleccionar el tipo de cliente")]
+        public string TipoCliente { get; set; } = "Individual";
+
+        public bool EsClienteFrecuente { get; set; } = false;
+
+        [StringLength(300, ErrorMessage = "La razón social no puede exceder los 300 caracteres")]
+        public string? RazonSocial { get; set; }
+
+        [StringLength(200, ErrorMessage = "El nombre de contacto no puede exceder los 200 caracteres")]
+        public string? NombreContacto { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (IdCliente.HasValue)
+            {
+                try
+                {
+                    var cliente = await ClienteServices.GetByIdAsync(IdCliente.Value);
+                    if (cliente != null)
+                    {
+                        // Mapear los datos al formulario
+                        clienteForm.NombreCliente = cliente.NombreCliente;
+                        clienteForm.ApellidoCliente = cliente.ApellidoCliente;
+                        clienteForm.NitCliente = cliente.NitCliente;
+                        clienteForm.DpiCliente = cliente.DpiCliente;
+                        clienteForm.RtuCliente = cliente.RtuCliente;
+                        clienteForm.TelefonoCliente = cliente.TelefonoCliente;
+                        clienteForm.EmailCliente = cliente.EmailCliente;
+                        clienteForm.DireccionCliente = cliente.DireccionCliente;
+                        clienteForm.TipoCliente = cliente.TipoCliente;
+                        clienteForm.EsClienteFrecuente = cliente.EsClienteFrecuente;
+                        clienteForm.RazonSocial = cliente.RazonSocial;
+                        clienteForm.NombreContacto = cliente.NombreContacto;
+                    }
+                    else
+                    {
+                        Snackbar.Add("Cliente no encontrado", Severity.Error);
+                        NavigationManager.NavigateTo("/clientes");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error al cargar el cliente: {ex.Message}", Severity.Error);
+                    NavigationManager.NavigateTo("/clientes");
+                }
+            }
+            else
+            {
+                clienteForm = new ClienteFormModel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ValidateNit()
+    {
+        nitValidationMessage = "";
+
+        if (!string.IsNullOrEmpty(clienteForm.NitCliente))
+        {
+            try
+            {
+                var exists = await ClienteServices.ExisteClienteConNitAsync(clienteForm.NitCliente, IdCliente);
+                if (exists)
+                {
+                    nitValidationMessage = "Ya existe un cliente con este NIT";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en validación de NIT: {ex.Message}");
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ValidateDpi()
+    {
+        dpiValidationMessage = "";
+
+        if (clienteForm.DpiCliente.HasValue)
+        {
+            try
+            {
+                var exists = await ClienteServices.ExisteClienteConDpiAsync(clienteForm.DpiCliente.Value, IdCliente);
+                if (exists)
+                {
+                    dpiValidationMessage = "Ya existe un cliente con este DPI";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en validación de DPI: {ex.Message}");
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validaciones adicionales
+            if (!string.IsNullOrEmpty(nitValidationMessage) || !string.IsNullOrEmpty(dpiValidationMessage))
+            {
+                Snackbar.Add("Corrija los errores de validación antes de continuar", Severity.Warning);
+                return;
+            }
+
+            // Mapear datos del formulario al modelo
+            var cliente = new Cliente();
+            
+            if (IdCliente.HasValue)
+            {
+                cliente.IdCliente = IdCliente.Value;
+                cliente.UsuarioModificacion = "Sistema"; // Cambiar por usuario logueado
+            }
+            else
+            {
+                cliente.UsuarioCreacion = "Sistema"; // Cambiar por usuario logueado
+            }
+
+            cliente.NombreCliente = clienteForm.NombreCliente?.Trim() ?? "";
+            cliente.ApellidoCliente = clienteForm.ApellidoCliente?.Trim();
+            cliente.NitCliente = clienteForm.NitCliente?.Trim();
+            cliente.DpiCliente = clienteForm.DpiCliente;
+            cliente.RtuCliente = clienteForm.RtuCliente?.Trim();
+            cliente.TelefonoCliente = clienteForm.TelefonoCliente?.Trim();
+            cliente.EmailCliente = clienteForm.EmailCliente?.Trim();
+            cliente.DireccionCliente = clienteForm.DireccionCliente?.Trim();
+            cliente.TipoCliente = clienteForm.TipoCliente;
+            cliente.EsClienteFrecuente = clienteForm.EsClienteFrecuente;
+            cliente.RazonSocial = clienteForm.RazonSocial?.Trim();
+            cliente.NombreContacto = clienteForm.NombreContacto?.Trim();
+
+            var result = await ClienteServices.AddUpdateAsync(cliente);
+
+            if (result)
+            {
+                var message = IdCliente.HasValue ? "Cliente actualizado correctamente" : "Cliente creado correctamente";
+                Snackbar.Add(message, Severity.Success);
+                NavigationManager.NavigateTo("/clientes");
+            }
+            else
+            {
+                Snackbar.Add("Error al guardar el cliente", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"💥 Error en HandleSubmit: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -71,6 +71,14 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRlZ29yaWFQcm9kdWN0b3NcTGlzdGFDYXRlZ29yaWEucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Clientes/ClientesLista.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDbGllbnRlc1xDbGllbnRlc0xpc3RhLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Clientes/CrearEditarCliente.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDbGllbnRlc1xDcmVhckVkaXRhckNsaWVudGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Counter.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb3VudGVyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
@@ -169,6 +177,14 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Sucrusales/ListadoSucursales.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTdWNydXNhbGVzXExpc3RhZG9TdWN1cnNhbGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/TiposPago/CrearEdiatarTipoPago.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUaXBvc1BhZ29cQ3JlYXJFZGlhdGFyVGlwb1BhZ28ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/TiposPago/ListaTiposPago.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUaXBvc1BhZ29cTGlzdGFUaXBvc1BhZ28ucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Bryan/OneDrive/Desktop/Proyectos Finales/ProyectoFarmaVita/ProyectoFarmaVita/ProyectoFarmaVita/Components/Pages/Traslados/CrearEditarTraslado.razor]

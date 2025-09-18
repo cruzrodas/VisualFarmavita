@@ -1,0 +1,333 @@
+﻿@page "/tipos-pago"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.TipoPagoServices
+@using MudBlazor
+
+@inject ITipoPagoService TipoPagoServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">Tipos de Pago</h3>
+<a href="/tipos-pago/agregar" class="btn btn-primary mt-2">Nuevo Tipo de Pago</a>
+
+<br />
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">Gestión de Tipos de Pago</MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" Label="Buscar Tipos de Pago"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search"
+                          Placeholder="Nombre del tipo de pago..." />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Buscar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">
+            @if (string.IsNullOrEmpty(searchArea))
+            {
+                <MudText>No hay tipos de pago registrados en el sistema.</MudText>
+            }
+            else
+            {
+                <MudText>No se encontraron tipos de pago que coincidan con la búsqueda "@searchArea".</MudText>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable T="TipoPago"
+                  ServerData="ServerReload"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Nombre del Tipo de Pago</MudTh>
+                <MudTh>Facturas Asociadas</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.IdTipoPago</MudTd>
+                <MudTd DataLabel="Nombre">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@GetTipoPagoIcon(context.NombrePago)" 
+                                 Color="@GetTipoPagoColor(context.NombrePago)" />
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                            @context.NombrePago
+                        </MudText>
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Facturas">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                        @(context.Factura?.Count ?? 0) facturas
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-flex gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Title="Editar tipo de pago"
+                                       OnClick="@(() => NavigateToEdit(context.IdTipoPago))" />
+
+                        @if (!context.Factura.Any())
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           Title="Eliminar tipo de pago"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        }
+                        else
+                        {
+                            <MudTooltip Text="No se puede eliminar porque tiene facturas asociadas">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Default"
+                                               Size="Size.Small"
+                                               Disabled="true" />
+                            </MudTooltip>
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Tipos de pago por página:"
+                               InfoFormat="@infoFormat"
+                               PageSizeOptions="new int[] { 10, 20, 25, 50, int.MaxValue }"
+                               OnPageChanged="LoadPage"
+                               Class="acciones" />
+            </PagerContent>
+        </MudTable>
+
+        <!-- Información adicional -->
+        @if (paginatedResult.Items.Any())
+        {
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="4">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Tipos de Pago</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">@paginatedResult.TotalCount</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Con Facturas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Success">@tiposConFacturas</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Sin Facturas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Warning">@tiposSinFacturas</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        }
+    }
+
+</MudPaper>
+
+@code {
+    private MPaginatedResult<TipoPago> paginatedResult;
+    private bool isLoading = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private const int PageSize = 20;
+    private string searchArea = "";
+
+    // Variables para estadísticas
+    private int tiposConFacturas = 0;
+    private int tiposSinFacturas = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task LoadPage(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            paginatedResult = await TipoPagoServices.GetPaginatedAsync(page, PageSize, searchArea);
+            CalcularEstadisticas();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<TableData<TipoPago>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        isLoading = true;
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+
+            paginatedResult = await TipoPagoServices.GetPaginatedAsync(page, pageSize, searchArea);
+            CalcularEstadisticas();
+
+            return new TableData<TipoPago>
+            {
+                Items = paginatedResult.Items,
+                TotalItems = paginatedResult.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new TableData<TipoPago>
+            {
+                Items = new List<TipoPago>(),
+                TotalItems = 0
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CalcularEstadisticas()
+    {
+        if (paginatedResult?.Items != null)
+        {
+            tiposConFacturas = paginatedResult.Items.Count(t => t.Factura.Any());
+            tiposSinFacturas = paginatedResult.Items.Count(t => !t.Factura.Any());
+        }
+    }
+
+    private async Task Search()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        await LoadPage(1);
+    }
+
+    private void NavigateToEdit(int idTipoPago)
+    {
+        NavigationManager.NavigateTo($"/tipos-pago/agregar/{idTipoPago}");
+    }
+
+    private async Task ConfirmDelete(TipoPago tipoPago)
+    {
+        var message = $"¿Está seguro que desea eliminar el tipo de pago '{tipoPago.NombrePago}'?\n\nEsta acción no se puede deshacer.";
+        var dialog = await DialogService.ShowMessageBox(
+            "Confirmar eliminación",
+            message,
+            yesText: "Eliminar",
+            cancelText: "Cancelar");
+
+        if (dialog == true)
+        {
+            await DeleteTipoPago(tipoPago.IdTipoPago);
+        }
+    }
+
+    private async Task DeleteTipoPago(int idTipoPago)
+    {
+        try
+        {
+            var result = await TipoPagoServices.DeleteAsync(idTipoPago);
+            if (result)
+            {
+                Snackbar.Add("Tipo de pago eliminado correctamente", Severity.Success);
+                await LoadPage(1);
+            }
+            else
+            {
+                Snackbar.Add("Error al eliminar el tipo de pago", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al eliminar: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetTipoPagoIcon(string? nombrePago)
+    {
+        if (string.IsNullOrEmpty(nombrePago)) return Icons.Material.Filled.Payment;
+
+        return nombrePago.ToLower() switch
+        {
+            var name when name.Contains("efectivo") => Icons.Material.Filled.Money,
+            var name when name.Contains("tarjeta") => Icons.Material.Filled.CreditCard,
+            var name when name.Contains("transferencia") => Icons.Material.Filled.SwapHoriz,
+            var name when name.Contains("cheque") => Icons.Material.Filled.RequestQuote,
+            var name when name.Contains("digital") => Icons.Material.Filled.QrCode,
+            var name when name.Contains("credito") => Icons.Material.Filled.CreditScore,
+            _ => Icons.Material.Filled.Payment
+        };
+    }
+
+    private Color GetTipoPagoColor(string? nombrePago)
+    {
+        if (string.IsNullOrEmpty(nombrePago)) return Color.Default;
+
+        return nombrePago.ToLower() switch
+        {
+            var name when name.Contains("efectivo") => Color.Success,
+            var name when name.Contains("tarjeta") => Color.Info,
+            var name when name.Contains("transferencia") => Color.Primary,
+            var name when name.Contains("cheque") => Color.Warning,
+            var name when name.Contains("digital") => Color.Secondary,
+            var name when name.Contains("credito") => Color.Tertiary,
+            _ => Color.Default
+        };
+    }
+}

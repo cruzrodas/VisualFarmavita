@@ -90,7 +90,12 @@
     private bool isLoading;
     private bool isUserAuthenticated;
 
-    protected override async Task OnInitializedAsync()
+    // protected override async Task OnInitializedAsync()
+    // {
+
+    // }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         try
         {
@@ -107,6 +112,8 @@
             logger.LogError(ex, "Error inicializando login component");
             errorMessage = "Error cargando el componente de login.";
         }
+
+        
     }
 
     private void TogglePasswordVisibility()

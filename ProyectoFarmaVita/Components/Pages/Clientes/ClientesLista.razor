@@ -1,0 +1,355 @@
+﻿@page "/clientes"
+
+@using System.Text.Json
+@using ProyectoFarmaVita.Models
+@using ProyectoFarmaVita.Services.ClienteServices
+@using MudBlazor
+
+@inject IClienteService ClienteServices
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<h3 style="margin-bottom: 20px;">Clientes</h3>
+<a href="/clientes/agregar" class="btn btn-primary mt-2">Nuevo Cliente</a>
+
+<br />
+
+<MudPaper Elevation="3" Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-2 text-center" Align="Align.Center">Gestión de Clientes</MudText>
+
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" Label="Buscar Clientes"
+                          Variant="Variant.Outlined"
+                          @bind-Value="searchArea"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Primary"
+                          OnDebounceIntervalElapsed="Search"
+                          Placeholder="Nombre, NIT, teléfono..." />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FilterList"
+                       OnClick="ApplyFilters">
+                Buscar
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters"
+                       Class="ml-2">
+                Limpiar
+            </MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Star"
+                       OnClick="VerClientesFrecuentes">
+                Clientes Frecuentes
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <br />
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <img src="/images/world-spinner.gif" alt="Cargando..." class="spinner-image" />
+        </div>
+    }
+    else if (paginatedResult == null || paginatedResult.Items == null || !paginatedResult.Items.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">
+            @if (string.IsNullOrEmpty(searchArea))
+            {
+                <MudText>No hay clientes registrados en el sistema.</MudText>
+            }
+            else
+            {
+                <MudText>No se encontraron clientes que coincidan con la búsqueda "@searchArea".</MudText>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable T="Cliente"
+                  ServerData="ServerReload"
+                  Dense="true"
+                  Hover="true"
+                  Bordered="true"
+                  Loading="@isLoading"
+                  RowClass="cursor-pointer"
+                  Class="printable-table">
+
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Nombre</MudTh>
+                <MudTh>NIT</MudTh>
+                <MudTh>Teléfono</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Tipo</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh Class="acciones">Acciones</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.IdCliente</MudTd>
+                <MudTd DataLabel="Nombre">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                            @context.NombreCliente @context.ApellidoCliente
+                        </MudText>
+                        @if (!string.IsNullOrEmpty(context.RazonSocial))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @context.RazonSocial
+                            </MudText>
+                        }
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="NIT">
+                    @if (!string.IsNullOrEmpty(context.NitCliente))
+                    {
+                        <MudText Typo="Typo.body2">@context.NitCliente</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin NIT</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Teléfono">
+                    @if (!string.IsNullOrEmpty(context.TelefonoCliente))
+                    {
+                        <MudText Typo="Typo.body2">@context.TelefonoCliente</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin teléfono</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Email">
+                    @if (!string.IsNullOrEmpty(context.EmailCliente))
+                    {
+                        <MudText Typo="Typo.body2">@context.EmailCliente</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="color: gray; font-style: italic;">Sin email</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tipo">
+                    <MudChip T="string" Size="Size.Small" 
+                             Color="@(context.TipoCliente == "Empresa" ? Color.Info : Color.Default)">
+                        @context.TipoCliente
+                    </MudChip>
+                    @if (context.EsClienteFrecuente)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Star">
+                            Frecuente
+                        </MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Activo ? Color.Success : Color.Default)"
+                             Icon="@(context.Activo ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Block)">
+                        @(context.Activo ? "Activo" : "Inactivo")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Class="acciones">
+                    <div class="d-flex gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       Title="Ver detalles"
+                                       OnClick="@(() => NavigateToEdit(context.IdCliente))" />
+
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Title="Editar cliente"
+                                       OnClick="@(() => NavigateToEdit(context.IdCliente))" />
+
+                        @if (!context.Factura.Any())
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           Title="Eliminar cliente"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Clientes por página:"
+                               InfoFormat="@infoFormat"
+                               PageSizeOptions="new int[] { 10, 20, 25, 50, int.MaxValue }"
+                               OnPageChanged="LoadPage"
+                               Class="acciones" />
+            </PagerContent>
+        </MudTable>
+    }
+
+</MudPaper>
+
+@code {
+    private MPaginatedResult<Cliente> paginatedResult;
+    private bool isLoading = false;
+    private string infoFormat = "{first_item}-{last_item} de {all_items}";
+    private const int PageSize = 20;
+    private string searchArea = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task LoadPage(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            paginatedResult = await ClienteServices.GetPaginatedAsync(page, PageSize, searchArea);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<TableData<Cliente>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        isLoading = true;
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+
+            paginatedResult = await ClienteServices.GetPaginatedAsync(page, pageSize, searchArea);
+
+            return new TableData<Cliente>
+            {
+                Items = paginatedResult.Items,
+                TotalItems = paginatedResult.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new TableData<Cliente>
+            {
+                Items = new List<Cliente>(),
+                TotalItems = 0
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Search()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadPage(1);
+    }
+
+    private async Task ClearFilters()
+    {
+        searchArea = "";
+        await LoadPage(1);
+    }
+
+    private async Task VerClientesFrecuentes()
+    {
+        try
+        {
+            var clientesFrecuentes = await ClienteServices.GetClientesFrecuentesAsync();
+
+            if (!clientesFrecuentes.Any())
+            {
+                Snackbar.Add("No hay clientes frecuentes registrados", Severity.Info);
+                return;
+            }
+
+            var message = $"Clientes Frecuentes ({clientesFrecuentes.Count}):\n\n";
+            foreach (var cliente in clientesFrecuentes.Take(10))
+            {
+                message += $"• {cliente.NombreCliente} {cliente.ApellidoCliente}";
+                if (!string.IsNullOrEmpty(cliente.NitCliente))
+                {
+                    message += $" - NIT: {cliente.NitCliente}";
+                }
+                message += "\n";
+            }
+
+            if (clientesFrecuentes.Count > 10)
+            {
+                message += $"\n... y {clientesFrecuentes.Count - 10} clientes más";
+            }
+
+            await DialogService.ShowMessageBox("Clientes Frecuentes", message, yesText: "Cerrar");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar clientes frecuentes: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateToEdit(int idCliente)
+    {
+        NavigationManager.NavigateTo($"/clientes/agregar/{idCliente}");
+    }
+
+    private async Task ConfirmDelete(Cliente cliente)
+    {
+        var message = $"¿Está seguro que desea eliminar el cliente '{cliente.NombreCliente} {cliente.ApellidoCliente}'?\n\nEsta acción no se puede deshacer.";
+        var dialog = await DialogService.ShowMessageBox(
+            "Confirmar eliminación",
+            message,
+            yesText: "Eliminar",
+            cancelText: "Cancelar");
+
+        if (dialog == true)
+        {
+            await DeleteCliente(cliente.IdCliente);
+        }
+    }
+
+    private async Task DeleteCliente(int idCliente)
+    {
+        try
+        {
+            var result = await ClienteServices.DeleteAsync(idCliente);
+            if (result)
+            {
+                Snackbar.Add("Cliente eliminado correctamente", Severity.Success);
+                await LoadPage(1);
+            }
+            else
+            {
+                Snackbar.Add("Error al eliminar el cliente", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al eliminar: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}
