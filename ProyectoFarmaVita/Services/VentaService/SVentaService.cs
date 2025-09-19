@@ -81,14 +81,65 @@ namespace ProyectoFarmaVita.Services.VentaService
         {
             try
             {
-                var cajaActiva = await ObtenerCajaActivaAsync(idPersona);
-                var tieneCajaActiva = cajaActiva != null;
-                _logger.LogInformation($"Usuario {idPersona} - Caja activa: {tieneCajaActiva}");
-                return tieneCajaActiva;
+                using var context = _contextFactory.CreateDbContext();
+
+                _logger.LogInformation($"🔍 Validando caja activa para persona ID: {idPersona}");
+
+                // Buscar TODAS las aperturas de caja para esta persona
+                var todasLasAperturas = await context.AperturaCaja
+                    .Include(a => a.IdCajaNavigation)
+                    .Include(a => a.IdPersonaNavigation)
+                    .Where(a => a.IdPersona == idPersona)
+                    .OrderByDescending(a => a.FechaApertura)
+                    .ToListAsync();
+
+                _logger.LogInformation($"📊 Total aperturas encontradas para persona {idPersona}: {todasLasAperturas.Count}");
+
+                foreach (var apertura in todasLasAperturas)
+                {
+                    _logger.LogInformation($"  - Apertura ID: {apertura.IdAperturaCaja}, " +
+                                         $"Caja: {apertura.IdCajaNavigation?.NombreCaja}, " +
+                                         $"Activa: {apertura.Activa}, " +
+                                         $"Fecha Apertura: {apertura.FechaApertura}, " +
+                                         $"Fecha Cierre: {apertura.FechaCierre}");
+                }
+
+                // Buscar caja activa con criterios flexibles
+                var cajaActiva = await context.AperturaCaja
+                    .Include(a => a.IdCajaNavigation)
+                    .Include(a => a.IdPersonaNavigation)
+                    .Where(a => a.IdPersona == idPersona &&
+                               (a.Activa == true) &&
+                               a.FechaCierre == null)
+                    .OrderByDescending(a => a.FechaApertura)
+                    .FirstOrDefaultAsync();
+
+                if (cajaActiva != null)
+                {
+                    _logger.LogInformation($"✅ Caja activa encontrada - ID: {cajaActiva.IdAperturaCaja}, " +
+                                         $"Caja: {cajaActiva.IdCajaNavigation?.NombreCaja}");
+                    return true;
+                }
+                else
+                {
+                    _logger.LogWarning($"❌ No se encontró caja activa para persona {idPersona}");
+
+                    // Buscar la apertura más reciente para diagnóstico
+                    var ultimaApertura = todasLasAperturas.FirstOrDefault();
+                    if (ultimaApertura != null)
+                    {
+                        _logger.LogWarning($"💡 Última apertura encontrada: " +
+                                         $"ID: {ultimaApertura.IdAperturaCaja}, " +
+                                         $"Activa: {ultimaApertura.Activa}, " +
+                                         $"Fecha Cierre: {ultimaApertura.FechaCierre}");
+                    }
+
+                    return false;
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error validando caja activa para usuario {idPersona}");
+                _logger.LogError(ex, $"❌ Error validando caja activa para usuario {idPersona}");
                 return false;
             }
         }
@@ -145,16 +196,31 @@ namespace ProyectoFarmaVita.Services.VentaService
             {
                 using var context = _contextFactory.CreateDbContext();
 
-                return await context.AperturaCaja
+                _logger.LogInformation($"🔍 Obteniendo caja activa para persona ID: {idPersona}");
+
+                var cajaActiva = await context.AperturaCaja
                     .Include(a => a.IdCajaNavigation)
-                    .FirstOrDefaultAsync(a =>
-                        a.IdPersona == idPersona &&
-                        a.Activa == true &&
-                        a.FechaCierre == null);
+                    .Include(a => a.IdPersonaNavigation)
+                    .Where(a => a.IdPersona == idPersona &&
+                               a.Activa == true &&
+                               a.FechaCierre == null)
+                    .OrderByDescending(a => a.FechaApertura)
+                    .FirstOrDefaultAsync();
+
+                if (cajaActiva != null)
+                {
+                    _logger.LogInformation($"✅ Caja activa obtenida - ID: {cajaActiva.IdAperturaCaja}");
+                }
+                else
+                {
+                    _logger.LogWarning($"❌ No se pudo obtener caja activa para persona {idPersona}");
+                }
+
+                return cajaActiva;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error obteniendo caja activa para usuario {idPersona}");
+                _logger.LogError(ex, $"❌ Error obteniendo caja activa para usuario {idPersona}");
                 return null;
             }
         }
@@ -182,6 +248,42 @@ namespace ProyectoFarmaVita.Services.VentaService
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error obteniendo inventario para usuario {idPersona}");
+                return null;
+            }
+        }
+
+        public async Task<AperturaCaja?> ObtenerAperturaCajaActivaPorPersonaAsync(int idPersona)
+        {
+            try
+            {
+                using var context = _contextFactory.CreateDbContext();
+
+                _logger.LogInformation($"🔍 Obteniendo apertura de caja activa para persona ID: {idPersona}");
+
+                var aperturaCajaActiva = await context.AperturaCaja
+                    .Include(a => a.IdCajaNavigation)
+                    .Include(a => a.IdPersonaNavigation)
+                    .Where(a => a.IdPersona == idPersona &&
+                               a.Activa == true &&
+                               a.FechaCierre == null)
+                    .OrderByDescending(a => a.FechaApertura)
+                    .FirstOrDefaultAsync();
+
+                if (aperturaCajaActiva != null)
+                {
+                    _logger.LogInformation($"✅ Apertura de caja activa encontrada - ID: {aperturaCajaActiva.IdAperturaCaja}, " +
+                                         $"Caja: {aperturaCajaActiva.IdCajaNavigation?.NombreCaja}");
+                }
+                else
+                {
+                    _logger.LogWarning($"❌ No se encontró apertura de caja activa para persona {idPersona}");
+                }
+
+                return aperturaCajaActiva;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ Error obteniendo apertura de caja activa para usuario {idPersona}");
                 return null;
             }
         }
@@ -401,8 +503,6 @@ namespace ProyectoFarmaVita.Services.VentaService
 
                 if (aperturaCaja != null)
                 {
-                    // Nota: En un sistema real, aquí actualizarías el saldo de la caja
-                    // Por ahora solo log para tracking
                     _logger.LogInformation($"Venta de Q{montoVenta:F2} registrada en caja {idAperturaCaja}");
                     return true;
                 }
@@ -487,8 +587,13 @@ namespace ProyectoFarmaVita.Services.VentaService
                     .Include(f => f.IdClienteNavigation)
                     .Include(f => f.IdTipoPagoNavigation)
                     .Include(f => f.IdEstadoNavigation)
+                    .Include(f => f.IdAperturaCajaNavigation)
+                        .ThenInclude(a => a.IdPersonaNavigation)
+                    .Include(f => f.IdAperturaCajaNavigation)
+                        .ThenInclude(a => a.IdCajaNavigation)
                     .Include(f => f.FacturaDetalle)
-                    .ThenInclude(fd => fd.IdProductoNavigation)
+                        .ThenInclude(fd => fd.IdProductoNavigation)
+                            .ThenInclude(p => p.IdCategoriaNavigation)
                     .FirstOrDefaultAsync(f => f.IdFactura == idFactura);
             }
             catch (Exception ex)
@@ -509,7 +614,9 @@ namespace ProyectoFarmaVita.Services.VentaService
                     .Include(f => f.IdTipoPagoNavigation)
                     .Include(f => f.IdEstadoNavigation)
                     .Include(f => f.IdAperturaCajaNavigation)
-                    .ThenInclude(a => a.IdPersonaNavigation)
+                        .ThenInclude(a => a.IdPersonaNavigation)
+                    .Include(f => f.IdAperturaCajaNavigation)
+                        .ThenInclude(a => a.IdCajaNavigation)
                     .AsQueryable();
 
                 if (idPersona.HasValue)
@@ -547,6 +654,7 @@ namespace ProyectoFarmaVita.Services.VentaService
 
                 return await context.FacturaDetalle
                     .Include(fd => fd.IdProductoNavigation)
+                        .ThenInclude(p => p.IdCategoriaNavigation)
                     .Where(fd => fd.IdFactura == idFactura)
                     .ToListAsync();
             }
@@ -647,23 +755,78 @@ namespace ProyectoFarmaVita.Services.VentaService
             return estado?.IdEstado ?? 1; // Valor por defecto
         }
 
-        public async Task<AperturaCaja?> ObtenerAperturaCajaActivaPorPersonaAsync(int idPersona)
+        #endregion
+
+        #region MÉTODOS DE DIAGNÓSTICO
+
+        public async Task<Dictionary<string, object>> DiagnosticarEstadoCajasAsync(int idPersona)
         {
             try
             {
                 using var context = _contextFactory.CreateDbContext();
 
-                return await context.AperturaCaja
-                    .Include(a => a.IdCajaNavigation)
-                    .FirstOrDefaultAsync(a =>
-                        a.IdPersona == idPersona &&
-                        a.Activa == true &&
-                        a.FechaCierre == null);
+                var diagnostico = new Dictionary<string, object>();
+
+                // Verificar si la persona existe
+                var persona = await context.Persona
+                    .Include(p => p.IdRoolNavigation)
+                    .FirstOrDefaultAsync(p => p.IdPersona == idPersona);
+
+                diagnostico["PersonaExiste"] = persona != null;
+                diagnostico["PersonaActiva"] = persona?.Activo == true;
+                diagnostico["RolPersona"] = persona?.IdRoolNavigation?.TipoRol ?? "Sin rol";
+                diagnostico["SucursalId"] = persona?.IdSucursal;
+
+                if (persona != null)
+                {
+                    // Obtener todas las aperturas de caja
+                    var aperturas = await context.AperturaCaja
+                        .Include(a => a.IdCajaNavigation)
+                        .Where(a => a.IdPersona == idPersona)
+                        .OrderByDescending(a => a.FechaApertura)
+                        .ToListAsync();
+
+                    diagnostico["TotalAperturas"] = aperturas.Count;
+                    diagnostico["AperturasActivas"] = aperturas.Count(a => a.Activa == true && a.FechaCierre == null);
+                    diagnostico["AperturasCerradas"] = aperturas.Count(a => a.FechaCierre != null);
+
+                    // Detalles de la apertura más reciente
+                    var ultimaApertura = aperturas.FirstOrDefault();
+                    if (ultimaApertura != null)
+                    {
+                        diagnostico["UltimaApertura"] = new
+                        {
+                            Id = ultimaApertura.IdAperturaCaja,
+                            Caja = ultimaApertura.IdCajaNavigation?.NombreCaja,
+                            FechaApertura = ultimaApertura.FechaApertura,
+                            FechaCierre = ultimaApertura.FechaCierre,
+                            Activa = ultimaApertura.Activa,
+                            MontoApertura = ultimaApertura.MontoApertura
+                        };
+                    }
+
+                    // Verificar cajas disponibles para esta persona
+                    var cajasDisponibles = await context.Caja
+                        .Include(c => c.IdSucursalNavigation)
+                        .Where(c => c.Activa == true)
+                        .ToListAsync();
+
+                    diagnostico["CajasDisponibles"] = cajasDisponibles.Count;
+
+                    // Verificar si hay cajas en la misma sucursal
+                    if (persona.IdSucursal.HasValue)
+                    {
+                        var cajasEnSucursal = cajasDisponibles.Count(c => c.IdSucursal == persona.IdSucursal);
+                        diagnostico["CajasEnMiSucursal"] = cajasEnSucursal;
+                    }
+                }
+
+                return diagnostico;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error obteniendo apertura de caja activa para usuario {idPersona}");
-                return null;
+                _logger.LogError(ex, $"Error en diagnóstico para usuario {idPersona}");
+                return new Dictionary<string, object> { ["Error"] = ex.Message };
             }
         }
 
