@@ -647,6 +647,26 @@ namespace ProyectoFarmaVita.Services.VentaService
             return estado?.IdEstado ?? 1; // Valor por defecto
         }
 
+        public async Task<AperturaCaja?> ObtenerAperturaCajaActivaPorPersonaAsync(int idPersona)
+        {
+            try
+            {
+                using var context = _contextFactory.CreateDbContext();
+
+                return await context.AperturaCaja
+                    .Include(a => a.IdCajaNavigation)
+                    .FirstOrDefaultAsync(a =>
+                        a.IdPersona == idPersona &&
+                        a.Activa == true &&
+                        a.FechaCierre == null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error obteniendo apertura de caja activa para usuario {idPersona}");
+                return null;
+            }
+        }
+
         #endregion
     }
 }

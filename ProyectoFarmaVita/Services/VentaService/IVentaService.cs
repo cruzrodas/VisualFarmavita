@@ -31,6 +31,8 @@ namespace ProyectoFarmaVita.Services.VentaService
         // REPORTES
         Task<Dictionary<string, object>> ObtenerEstadisticasVentasDiariasAsync(int idPersona);
         Task<List<dynamic>> ObtenerProductosMasVendidosAsync(int idInventario, DateTime fechaInicio, DateTime fechaFin);
+
+        Task<AperturaCaja?> ObtenerAperturaCajaActivaPorPersonaAsync(int idPersona);
     }
 
     // MODELOS PARA EL SERVICIO

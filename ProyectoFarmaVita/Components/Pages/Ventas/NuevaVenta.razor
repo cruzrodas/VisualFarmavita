@@ -29,266 +29,226 @@
                         Nueva Venta
                     </MudText>
                 </MudStack>
-
-                <!-- Validaciones Previas Simplificadas -->
-                @if (validacionesRealizadas)
-                {
-                    <MudGrid Spacing="2" Class="mt-4">
-                        <MudItem xs="6">
-                            <MudChip T="string" Size="Size.Medium"
-                                     Color="@(validacionCaja ? Color.Success : Color.Error)"
-                                     Icon="@(validacionCaja ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)">
-                                Caja Asignada
-                            </MudChip>
-                        </MudItem>
-                        <MudItem xs="6">
-                            <MudChip T="string" Size="Size.Medium"
-                                     Color="@(validacionInventario ? Color.Success : Color.Error)"
-                                     Icon="@(validacionInventario ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)">
-                                Inventario Disponible
-                            </MudChip>
-                        </MudItem>
-                    </MudGrid>
-
-                    @if (!puedeRealizarVenta)
-                    {
-                        <MudAlert Severity="Severity.Error" Class="mt-4">
-                            <MudText>
-                                @if (!validacionCaja)
-                                {
-                                    <span>No tiene una caja activa asignada. </span>
-                                }
-                                @if (!validacionInventario)
-                                {
-                                    <span>No se encontró inventario para su sucursal.</span>
-                                }
-                            </MudText>
-                        </MudAlert>
-                    }
-                }
             </MudPaper>
 
-            @if (puedeRealizarVenta)
-            {
-                <!-- Formulario de Venta -->
-                <EditForm Model="ventaForm" OnValidSubmit="HandleSubmit">
-                    <DataAnnotationsValidator />
+            <!-- Formulario de Venta -->
+            <EditForm Model="ventaForm" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
 
-                    <!-- Información del Cliente y Pago -->
-                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
-                        <MudCardHeader Class="pb-2">
-                            <CardHeaderContent>
-                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
-                                    <MudText Typo="Typo.h6" Class="ma-0">Información de Venta</MudText>
-                                </MudStack>
-                            </CardHeaderContent>
-                        </MudCardHeader>
-                        <MudCardContent Class="pt-2">
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" md="6">
-                                    <MudSelect T="int?"
-                                               Label="Cliente"
-                                               @bind-Value="ventaForm.IdCliente"
-                                               Variant="Variant.Outlined"
-                                               Clearable="true">
-                                        <MudSelectItem Value="@((int?)null)">Cliente General</MudSelectItem>
-                                        @if (clientes != null)
-                                        {
-                                            @foreach (var cliente in clientes)
-                                            {
-                                                <MudSelectItem Value="@((int?)cliente.IdCliente)">
-                                                    @($"{cliente.NombreCliente} {cliente.ApellidoCliente} - {cliente.NitCliente}")
-                                                </MudSelectItem>
-                                            }
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-
-                                <MudItem xs="12" md="6">
-                                    <MudSelect T="int"
-                                               Label="Tipo de Pago"
-                                               @bind-Value="ventaForm.IdTipoPago"
-                                               For="@(() => ventaForm.IdTipoPago)"
-                                               Variant="Variant.Outlined"
-                                               Required="true"
-                                               RequiredError="Debe seleccionar un tipo de pago">
-                                        @if (tiposPago != null)
-                                        {
-                                            @foreach (var tipoPago in tiposPago)
-                                            {
-                                                <MudSelectItem Value="@tipoPago.IdTipoPago">
-                                                    @tipoPago.NombrePago
-                                                </MudSelectItem>
-                                            }
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-
-                                <MudItem xs="12">
-                                    <MudTextField Label="Observaciones"
-                                                  @bind-Value="ventaForm.Observaciones"
-                                                  Variant="Variant.Outlined"
-                                                  Lines="2"
-                                                  MaxLength="150"
-                                                  Counter="150"
-                                                  HelperText="Observaciones adicionales sobre la venta" />
-                                </MudItem>
-                            </MudGrid>
-                        </MudCardContent>
-                    </MudCard>
-
-                    <!-- Búsqueda y Selección de Productos -->
-                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
-                        <MudCardHeader Class="pb-2">
-                            <CardHeaderContent>
-                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Primary" />
-                                    <MudText Typo="Typo.h6" Class="ma-0">Selección de Productos</MudText>
-                                </MudStack>
-                            </CardHeaderContent>
-                        </MudCardHeader>
-                        <MudCardContent Class="pt-2">
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" md="8">
-                                    <MudTextField @bind-Value="busquedaProducto"
-                                                  Label="Buscar productos"
-                                                  Variant="Variant.Outlined"
-                                                  Adornment="Adornment.Start"
-                                                  AdornmentIcon="@Icons.Material.Filled.Search"
-                                                  AdornmentColor="Color.Primary"
-                                                  Immediate="true"
-                                                  DebounceInterval="300"
-                                                  OnDebounceIntervalElapsed="BuscarProductos"
-                                                  Placeholder="Nombre del producto..."
-                                                  Clearable="true" />
-                                </MudItem>
-
-                                <MudItem xs="12" md="4">
-                                    <MudButton Variant="Variant.Outlined"
-                                               Color="Color.Primary"
-                                               StartIcon="@Icons.Material.Filled.Refresh"
-                                               OnClick="RefreshProductos"
-                                               FullWidth="true">
-                                        Actualizar
-                                    </MudButton>
-                                </MudItem>
-                            </MudGrid>
-
-                            <!-- Lista de Productos Disponibles -->
-                            @if (loadingProductos)
-                            {
-                                <div class="text-center pa-6">
-                                    <MudProgressCircular Size="Size.Large" Indeterminate="true" />
-                                    <MudText Typo="Typo.body1" Class="mt-3">Cargando productos...</MudText>
-                                </div>
-                            }
-                            else if (!productosDisponibles.Any())
-                            {
-                                <MudAlert Severity="Severity.Info" Class="mt-4">
-                                    @if (string.IsNullOrEmpty(busquedaProducto))
+                <!-- Información del Cliente y Pago -->
+                <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                    <MudCardHeader Class="pb-2">
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="ma-0">Información de Venta</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Class="pt-2">
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="int?"
+                                           Label="Cliente"
+                                           @bind-Value="ventaForm.IdCliente"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true">
+                                    <MudSelectItem Value="@((int?)null)">Cliente General</MudSelectItem>
+                                    @if (clientes != null)
                                     {
-                                        <MudText>No hay productos disponibles en el inventario.</MudText>
+                                        @foreach (var cliente in clientes)
+                                        {
+                                            <MudSelectItem Value="@((int?)cliente.IdCliente)">
+                                                @($"{cliente.NombreCliente} {cliente.ApellidoCliente} - {cliente.NitCliente}")
+                                            </MudSelectItem>
+                                        }
                                     }
-                                    else
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="int"
+                                           Label="Tipo de Pago"
+                                           @bind-Value="ventaForm.IdTipoPago"
+                                           For="@(() => ventaForm.IdTipoPago)"
+                                           Variant="Variant.Outlined"
+                                           Required="true"
+                                           RequiredError="Debe seleccionar un tipo de pago">
+                                    @if (tiposPago != null)
                                     {
-                                        <MudText>No se encontraron productos con el término "@busquedaProducto".</MudText>
+                                        @foreach (var tipoPago in tiposPago)
+                                        {
+                                            <MudSelectItem Value="@tipoPago.IdTipoPago">
+                                                @tipoPago.NombrePago
+                                            </MudSelectItem>
+                                        }
                                     }
-                                </MudAlert>
-                            }
-                            else
-                            {
-                                <div style="max-height: 400px; overflow-y: auto;" class="mt-4">
-                                    <MudTable T="InventarioProducto"
-                                              Items="@productosDisponibles"
-                                              Dense="true"
-                                              Hover="true"
-                                              Striped="true">
-                                        <HeaderContent>
-                                            <MudTh>Producto</MudTh>
-                                            <MudTh>Stock</MudTh>
-                                            <MudTh>Precio</MudTh>
-                                            <MudTh>Acción</MudTh>
-                                        </HeaderContent>
-                                        <RowTemplate Context="producto">
-                                            <MudTd DataLabel="Producto">
-                                                <MudStack Spacing="1">
-                                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">
-                                                        @producto.IdProductoNavigation?.NombreProducto
-                                                    </MudText>
-                                                    @if (!string.IsNullOrEmpty(producto.IdProductoNavigation?.DescrpcionProducto))
-                                                    {
-                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                            @producto.IdProductoNavigation.DescrpcionProducto
-                                                        </MudText>
-                                                    }
-                                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">
-                                                        @producto.IdProductoNavigation?.IdCategoriaNavigation?.NombreCategoria
-                                                    </MudChip>
-                                                </MudStack>
-                                            </MudTd>
-                                            <MudTd DataLabel="Stock">
-                                                <MudChip T="string" Size="Size.Small"
-                                                         Color="@(producto.Cantidad > (producto.StockMinimo ?? 0) ? Color.Success : Color.Warning)">
-                                                    @producto.Cantidad disponibles
-                                                </MudChip>
-                                            </MudTd>
-                                            <MudTd DataLabel="Precio">
-                                                <MudText Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;">
-                                                    Q@(producto.IdProductoNavigation?.PrecioVenta?.ToString("F2") ?? "0.00")
-                                                </MudText>
-                                            </MudTd>
-                                            <MudTd DataLabel="Acción">
-                                                <MudButton Variant="Variant.Filled"
-                                                           Color="Color.Primary"
-                                                           Size="Size.Small"
-                                                           StartIcon="@Icons.Material.Filled.Add"
-                                                           OnClick="@(() => AgregarProductoAVenta(producto))"
-                                                           Disabled="@(producto.Cantidad <= 0)">
-                                                    Agregar
-                                                </MudButton>
-                                            </MudTd>
-                                        </RowTemplate>
-                                    </MudTable>
-                                </div>
-                            }
-                        </MudCardContent>
-                    </MudCard>
+                                </MudSelect>
+                            </MudItem>
 
-                    <!-- Botones de Acción -->
-                    <MudCard Elevation="2" Class="pa-4 rounded-lg">
-                        <MudStack Row Spacing="3" Justify="Justify.Center">
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Secondary"
-                                       StartIcon="@Icons.Material.Filled.ArrowBack"
-                                       OnClick="@(() => NavigationManager.NavigateTo("/ventas"))"
-                                       Size="Size.Large"
-                                       Class="flex-1">
-                                Cancelar
-                            </MudButton>
+                            <MudItem xs="12">
+                                <MudTextField Label="Observaciones"
+                                              @bind-Value="ventaForm.Observaciones"
+                                              Variant="Variant.Outlined"
+                                              Lines="2"
+                                              MaxLength="150"
+                                              Counter="150"
+                                              HelperText="Observaciones adicionales sobre la venta" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
 
-                            <MudButton ButtonType="ButtonType.Submit"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.PointOfSale"
-                                       Disabled="@(isSubmitting || !productosVenta.Any() || ventaForm.IdTipoPago == 0)"
-                                       Size="Size.Large"
-                                       Class="flex-2">
-                                @if (isSubmitting)
+                <!-- Búsqueda y Selección de Productos -->
+                <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                    <MudCardHeader Class="pb-2">
+                        <CardHeaderContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="ma-0">Selección de Productos</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Class="pt-2">
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="busquedaProducto"
+                                              Label="Buscar productos"
+                                              Variant="Variant.Outlined"
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Search"
+                                              AdornmentColor="Color.Primary"
+                                              Immediate="true"
+                                              DebounceInterval="300"
+                                              OnDebounceIntervalElapsed="BuscarProductos"
+                                              Placeholder="Nombre del producto..."
+                                              Clearable="true" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Refresh"
+                                           OnClick="RefreshProductos"
+                                           FullWidth="true">
+                                    Actualizar
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+
+                        <!-- Lista de Productos Disponibles -->
+                        @if (loadingProductos)
+                        {
+                            <div class="text-center pa-6">
+                                <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                                <MudText Typo="Typo.body1" Class="mt-3">Cargando productos...</MudText>
+                            </div>
+                        }
+                        else if (!productosDisponibles.Any())
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mt-4">
+                                @if (string.IsNullOrEmpty(busquedaProducto))
                                 {
-                                    <MudProgressCircular Class="me-2" Size="Size.Small" Indeterminate="true" />
-                                    <MudText>Procesando Venta...</MudText>
+                                    <MudText>No hay productos disponibles en el inventario.</MudText>
                                 }
                                 else
                                 {
-                                    <MudText>Procesar Venta - Q@totalVenta.ToString("F2")</MudText>
+                                    <MudText>No se encontraron productos con el término "@busquedaProducto".</MudText>
                                 }
-                            </MudButton>
-                        </MudStack>
-                    </MudCard>
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <div style="max-height: 400px; overflow-y: auto;" class="mt-4">
+                                <MudTable T="InventarioProducto"
+                                          Items="@productosDisponibles"
+                                          Dense="true"
+                                          Hover="true"
+                                          Striped="true">
+                                    <HeaderContent>
+                                        <MudTh>Producto</MudTh>
+                                        <MudTh>Stock</MudTh>
+                                        <MudTh>Precio</MudTh>
+                                        <MudTh>Acción</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate Context="producto">
+                                        <MudTd DataLabel="Producto">
+                                            <MudStack Spacing="1">
+                                                <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                                                    @producto.IdProductoNavigation?.NombreProducto
+                                                </MudText>
+                                                @if (!string.IsNullOrEmpty(producto.IdProductoNavigation?.DescrpcionProducto))
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                        @producto.IdProductoNavigation.DescrpcionProducto
+                                                    </MudText>
+                                                }
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                                    @producto.IdProductoNavigation?.IdCategoriaNavigation?.NombreCategoria
+                                                </MudChip>
+                                            </MudStack>
+                                        </MudTd>
+                                        <MudTd DataLabel="Stock">
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@(producto.Cantidad > (producto.StockMinimo ?? 0) ? Color.Success : Color.Warning)">
+                                                @producto.Cantidad disponibles
+                                            </MudChip>
+                                        </MudTd>
+                                        <MudTd DataLabel="Precio">
+                                            <MudText Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;">
+                                                Q@(producto.IdProductoNavigation?.PrecioVenta?.ToString("F2") ?? "0.00")
+                                            </MudText>
+                                        </MudTd>
+                                        <MudTd DataLabel="Acción">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.Add"
+                                                       OnClick="@(() => AgregarProductoAVenta(producto))"
+                                                       Disabled="@(producto.Cantidad <= 0)">
+                                                Agregar
+                                            </MudButton>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
 
-                </EditForm>
-            }
+                <!-- Botones de Acción -->
+                <MudCard Elevation="2" Class="pa-4 rounded-lg">
+                    <MudStack Row Spacing="3" Justify="Justify.Center">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                                   OnClick="@(() => NavigationManager.NavigateTo("/ventas"))"
+                                   Size="Size.Large"
+                                   Class="flex-1">
+                            Cancelar
+                        </MudButton>
+
+                        <MudButton ButtonType="ButtonType.Submit"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.PointOfSale"
+                                   Disabled="@(isSubmitting || !productosVenta.Any() || ventaForm.IdTipoPago == 0)"
+                                   Size="Size.Large"
+                                   Class="flex-2">
+                            @if (isSubmitting)
+                            {
+                                <MudProgressCircular Class="me-2" Size="Size.Small" Indeterminate="true" />
+                                <MudText>Procesando Venta...</MudText>
+                            }
+                            else
+                            {
+                                <MudText>Procesar Venta - Q@totalVenta.ToString("F2")</MudText>
+                            }
+                        </MudButton>
+                    </MudStack>
+                </MudCard>
+
+            </EditForm>
         </MudItem>
 
         <!-- Columna Lateral - Carrito de Venta -->
@@ -471,13 +431,10 @@
     }
 
     @@media (max-width: 1279px) {
-        .sidebar-sticky
-
-    {
-        position: relative;
-        top: auto;
-    }
-
+        .sidebar-sticky {
+            position: relative;
+            top: auto;
+        }
     }
 
     .rounded-lg {
@@ -558,15 +515,7 @@
     private bool loadingProductos = false;
     private string busquedaProducto = "";
 
-    // Variables para validaciones simplificadas
-    private bool validacionesRealizadas = false;
-    private bool validacionCaja = false;
-    private bool validacionInventario = false;
-    private bool puedeRealizarVenta = false;
-
     // Variables para la venta
-    private AperturaCaja? cajaActiva = null;
-    private Inventario? inventarioAsignado = null;
     private int idPersonaVenta = 0;
 
     // Cálculos de venta
@@ -605,42 +554,12 @@
             // Si se pasa IdPersona, usarlo, sino usar un valor por defecto para pruebas
             idPersonaVenta = IdPersona ?? 1; // Cambiar por el usuario logueado
 
-            await RealizarValidacionesPrevias();
-
-            if (puedeRealizarVenta)
-            {
-                await LoadDropdownData();
-                await LoadProductosDisponibles();
-            }
+            await LoadDropdownData();
+            await LoadProductosDisponibles();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
-        }
-    }
-
-    private async Task RealizarValidacionesPrevias()
-    {
-        try
-        {
-            // Solo validar caja activa e inventario disponible
-            validacionCaja = await VentaServices.ValidarCajaActivaAsync(idPersonaVenta);
-            validacionInventario = await VentaServices.ValidarInventarioAsignadoAsync(idPersonaVenta);
-
-            puedeRealizarVenta = validacionCaja && validacionInventario;
-
-            if (puedeRealizarVenta)
-            {
-                cajaActiva = await VentaServices.ObtenerCajaActivaAsync(idPersonaVenta);
-                inventarioAsignado = await VentaServices.ObtenerInventarioAsignadoAsync(idPersonaVenta);
-            }
-
-            validacionesRealizadas = true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error en validaciones: {ex.Message}");
-            Snackbar.Add("Error al realizar validaciones previas", Severity.Error);
         }
     }
 
@@ -663,11 +582,9 @@
         try
         {
             loadingProductos = true;
-            if (inventarioAsignado != null)
-            {
-                productosDisponibles = await VentaServices.ObtenerProductosDisponiblesAsync(
-                    inventarioAsignado.IdInventario, busquedaProducto);
-            }
+            // Cargar productos disponibles sin validar inventario específico
+            productosDisponibles = await VentaServices.ObtenerProductosDisponiblesAsync(
+                1, busquedaProducto); // Usar inventario genérico o el primero disponible
         }
         catch (Exception ex)
         {
@@ -791,33 +708,24 @@
                 return;
             }
 
-            if (cajaActiva == null || inventarioAsignado == null)
-            {
-                Snackbar.Add("Error: No se encontró caja activa o inventario asignado", Severity.Error);
-                return;
-            }
-
             isSubmitting = true;
             StateHasChanged();
 
-            // Validar stock antes de procesar
-            foreach (var producto in productosVenta)
+            // Obtener la apertura de caja activa del usuario logueado
+            var aperturaUsuario = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
+            if (aperturaUsuario == null)
             {
-                var stockDisponible = await VentaServices.ValidarStockDisponibleAsync(
-                    inventarioAsignado.IdInventario, producto.IdProducto, producto.Cantidad);
-
-                if (!stockDisponible)
-                {
-                    Snackbar.Add($"Stock insuficiente para {producto.NombreProducto}", Severity.Error);
-                    return;
-                }
+                Snackbar.Add("No tiene una apertura de caja activa. Debe abrir caja antes de realizar ventas.", Severity.Error);
+                isSubmitting = false;
+                StateHasChanged();
+                return;
             }
 
             // Crear modelo de venta
             var ventaModel = new VentaModel
             {
                 IdPersona = idPersonaVenta,
-                IdAperturaCaja = cajaActiva.IdAperturaCaja,
+                IdAperturaCaja = aperturaUsuario.IdAperturaCaja,
                 IdCliente = ventaForm.IdCliente,
                 IdTipoPago = ventaForm.IdTipoPago,
                 SubTotal = subtotalVenta,
@@ -837,19 +745,19 @@
                 }).ToList()
             };
 
-            // Procesar la venta
+            // Procesar la venta directamente
             var idFactura = await VentaServices.CrearFacturaAsync(ventaModel);
 
             if (idFactura > 0)
             {
                 // Actualizar inventario
                 var inventarioActualizado = await VentaServices.ActualizarInventarioAsync(
-                    ventaModel.Detalles, inventarioAsignado.IdInventario);
+                    ventaModel.Detalles, 1); // Usar inventario por defecto
 
                 if (inventarioActualizado)
                 {
-                    // Actualizar caja
-                    await VentaServices.ActualizarCajaAsync(cajaActiva.IdAperturaCaja, totalVenta);
+                    // Actualizar caja (opcional)
+                    await VentaServices.ActualizarCajaAsync(1, totalVenta);
 
                     Snackbar.Add($"Venta procesada exitosamente. Factura #{idFactura}", Severity.Success);
 
