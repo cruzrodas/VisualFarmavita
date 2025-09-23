@@ -12,7 +12,7 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
         Task<AperturaCaja> GetAperturaActivaByCajaAsync(int idCaja);
         Task<List<AperturaCaja>> GetByPersonaAsync(int idPersona);
         Task<List<AperturaCaja>> GetByCajaAsync(int idCaja);
-        Task<bool> CerrarAperturaAsync(int idAperturaCaja, double montoCierre, string observaciones = null);
+        Task<bool> CerrarAperturaAsync(int idAperturaCaja, string observaciones = null);
         Task<bool> TieneCajaAbiertaAsync(int idCaja);
         Task<List<AperturaCaja>> GetAperturasActivasAsync();
     }

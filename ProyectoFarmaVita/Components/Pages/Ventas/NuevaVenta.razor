@@ -8,7 +8,9 @@
 @using ProyectoFarmaVita.Services.TipoPagoServices
 @using MudBlazor
 @using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Authorization
 
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IVentaService VentaServices
 @inject IPersonaService PersonaServices
 @inject IClienteService ClienteServices
@@ -551,8 +553,22 @@
     {
         try
         {
-            // Si se pasa IdPersona, usarlo, sino usar un valor por defecto para pruebas
-            idPersonaVenta = IdPersona ?? 1; // Cambiar por el usuario logueado
+            // Obtener el usuario logueado desde el contexto de autenticación
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst("IdPersona");
+
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                // Si se pasa IdPersona como parámetro, usarlo, sino usar el usuario logueado
+                idPersonaVenta = IdPersona ?? userId;
+            }
+            else
+            {
+                // Si no se puede obtener el usuario logueado, mostrar error
+                Snackbar.Add("Error: No se pudo obtener el usuario logueado", Severity.Error);
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
 
             await LoadDropdownData();
             await LoadProductosDisponibles();
@@ -698,6 +714,108 @@
         StateHasChanged();
     }
 
+    // private async Task HandleSubmit()
+    // {
+    //     try
+    //     {
+    //         if (!productosVenta.Any())
+    //         {
+    //             Snackbar.Add("Debe agregar al menos un producto", Severity.Warning);
+    //             return;
+    //         }
+
+    //         isSubmitting = true;
+    //         StateHasChanged();
+
+    //         // Obtener la apertura de caja activa del usuario logueado
+    //         var aperturaUsuario = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
+    //         if (aperturaUsuario == null)
+    //         {
+    //             Snackbar.Add("No tiene una apertura de caja activa. Debe abrir caja antes de realizar ventas.", Severity.Error);
+    //             isSubmitting = false;
+    //             StateHasChanged();
+    //             return;
+    //         }
+
+    //         // Crear modelo de venta
+    //         var ventaModel = new VentaModel
+    //         {
+    //             IdPersona = idPersonaVenta,
+    //             IdAperturaCaja = aperturaUsuario.IdAperturaCaja,
+    //             IdCliente = ventaForm.IdCliente,
+    //             IdTipoPago = ventaForm.IdTipoPago,
+    //             SubTotal = subtotalVenta,
+    //             Impuestos = impuestosVenta,
+    //             Descuento = descuentoVenta,
+    //             Total = totalVenta,
+    //             Observaciones = ventaForm.Observaciones,
+    //             Detalles = productosVenta.Select(p => new VentaDetalleModel
+    //             {
+    //                 IdProducto = p.IdProducto,
+    //                 Cantidad = p.Cantidad,
+    //                 PrecioUnitario = p.PrecioUnitario,
+    //                 SubTotal = p.Cantidad * p.PrecioUnitario,
+    //                 Impuesto = (p.Cantidad * p.PrecioUnitario) * 0.12,
+    //                 Descuento = 0,
+    //                 Total = (p.Cantidad * p.PrecioUnitario) + ((p.Cantidad * p.PrecioUnitario) * 0.12)
+    //             }).ToList()
+    //         };
+
+    //         // Procesar la venta directamente
+    //         var idFactura = await VentaServices.CrearFacturaAsync(ventaModel);
+
+    //         if (idFactura > 0)
+    //         {
+    //             // Actualizar inventario
+    //             var inventarioActualizado = await VentaServices.ActualizarInventarioAsync(
+    //                 ventaModel.Detalles, 1); // Usar inventario por defecto
+
+    //             if (inventarioActualizado)
+    //             {
+    //                 // Actualizar caja (opcional)
+    //                 await VentaServices.ActualizarCajaAsync(1, totalVenta);
+
+    //                 Snackbar.Add($"Venta procesada exitosamente. Factura #{idFactura}", Severity.Success);
+
+    //                 // Preguntar si desea imprimir o ver la factura
+    //                 var result = await DialogService.ShowMessageBox(
+    //                     "Venta Exitosa",
+    //                     $"Venta procesada correctamente.\nFactura #{idFactura}\nTotal: Q{totalVenta:F2}\n\n¿Desea ver los detalles de la factura?",
+    //                     yesText: "Ver Factura",
+    //                     cancelText: "Nueva Venta");
+
+    //                 if (result == true)
+    //                 {
+    //                     NavigationManager.NavigateTo($"/ventas/factura/{idFactura}");
+    //                 }
+    //                 else
+    //                 {
+    //                     // Limpiar formulario para nueva venta
+    //                     LimpiarFormulario();
+    //                 }
+    //             }
+    //             else
+    //             {
+    //                 Snackbar.Add("Error al actualizar el inventario", Severity.Error);
+    //             }
+    //         }
+    //         else
+    //         {
+    //             Snackbar.Add("Error al procesar la venta", Severity.Error);
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"Error al procesar venta: {ex.Message}");
+    //         Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+    //     }
+    //     finally
+    //     {
+    //         isSubmitting = false;
+    //         StateHasChanged();
+    //     }
+    // }
+
     private async Task HandleSubmit()
     {
         try
@@ -710,6 +828,19 @@
 
             isSubmitting = true;
             StateHasChanged();
+
+            // Verificar que tenemos un usuario válido
+            if (idPersonaVenta <= 0)
+            {
+                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                var userIdClaim = authState.User.FindFirst("IdPersona");
+
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out idPersonaVenta))
+                {
+                    Snackbar.Add("Error: No se pudo obtener el usuario logueado", Severity.Error);
+                    return;
+                }
+            }
 
             // Obtener la apertura de caja activa del usuario logueado
             var aperturaUsuario = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
@@ -745,19 +876,34 @@
                 }).ToList()
             };
 
+            // Obtener el inventario asociado a la sucursal del usuario
+            var persona = await PersonaServices.GetByIdAsync(idPersonaVenta);
+            if (persona?.IdSucursal == null)
+            {
+                Snackbar.Add("Error: El usuario no tiene sucursal asignada", Severity.Error);
+                return;
+            }
+
             // Procesar la venta directamente
             var idFactura = await VentaServices.CrearFacturaAsync(ventaModel);
 
             if (idFactura > 0)
             {
-                // Actualizar inventario
+                // Actualizar inventario usando el inventario de la sucursal del usuario
                 var inventarioActualizado = await VentaServices.ActualizarInventarioAsync(
-                    ventaModel.Detalles, 1); // Usar inventario por defecto
+                    ventaModel.Detalles, persona.IdSucursal.Value);
 
                 if (inventarioActualizado)
                 {
-                    // Actualizar caja (opcional)
-                    await VentaServices.ActualizarCajaAsync(1, totalVenta);
+                    // Actualizar caja usando la caja de la apertura actual
+                    if (aperturaUsuario.IdCaja.HasValue)
+                    {
+                        await VentaServices.ActualizarCajaAsync(aperturaUsuario.IdCaja.Value, totalVenta);
+                    }
+                    else
+                    {
+                        Snackbar.Add("Error: La apertura de caja no tiene una caja asociada", Severity.Warning);
+                    }
 
                     Snackbar.Add($"Venta procesada exitosamente. Factura #{idFactura}", Severity.Success);
 

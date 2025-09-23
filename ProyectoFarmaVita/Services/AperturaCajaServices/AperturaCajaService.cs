@@ -28,6 +28,7 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
                     // Crear nueva apertura
                     aperturaCaja.FechaApertura = DateTime.Now;
                     aperturaCaja.Activa = true;
+                    aperturaCaja.TotalCaja = aperturaCaja.MontoApertura;
                     _context.AperturaCaja.Add(aperturaCaja);
                 }
                 else
@@ -37,8 +38,18 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
                     if (existingApertura == null)
                         return false;
 
+                    // Solo actualizar TotalCaja si la apertura está activa y no tiene facturas
+                    var tieneFacturas = await _context.Factura.AnyAsync(f => f.IdAperturaCaja == aperturaCaja.IdAperturaCaja);
+
                     existingApertura.MontoApertura = aperturaCaja.MontoApertura;
                     existingApertura.Observaciones = aperturaCaja.Observaciones;
+
+                    // Solo recalcular TotalCaja si no hay facturas asociadas
+                    if (!tieneFacturas)
+                    {
+                        existingApertura.TotalCaja = aperturaCaja.MontoApertura;
+                    }
+                    // Si hay facturas, mantener el TotalCaja actual
 
                     _context.AperturaCaja.Update(existingApertura);
                 }
@@ -221,7 +232,7 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
             }
         }
 
-        public async Task<bool> CerrarAperturaAsync(int idAperturaCaja, double montoCierre, string observaciones = null)
+        public async Task<bool> CerrarAperturaAsync(int idAperturaCaja, string observaciones = null)
         {
             try
             {
@@ -230,7 +241,9 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
                     return false;
 
                 apertura.FechaCierre = DateTime.Now;
-                apertura.MontoCierre = montoCierre;
+                // Usar el TotalCaja actual como MontoCierre
+                apertura.MontoCierre = apertura.TotalCaja;
+                // TotalCaja permanece con su valor actual
                 apertura.Activa = false;
 
                 if (!string.IsNullOrEmpty(observaciones))

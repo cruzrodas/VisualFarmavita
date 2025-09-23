@@ -140,6 +140,7 @@
                 </MudItem>
             }
 
+            
             <!-- Cierre de caja (solo para aperturas activas) -->
             @if (IdAperturaCaja.HasValue && aperturaCaja.Activa == true)
             {
@@ -148,16 +149,13 @@
                     <MudDivider />
                 </MudItem>
 
+                <!-- Mostrar el monto actual de la caja -->
                 <MudItem xs="12" md="6">
-                    <MudNumericField T="double?"
-                                     Label="Monto de Cierre"
-                                     @bind-Value="montoCierre"
-                                     Variant="Variant.Outlined"
-                                     Format="F2"
-                                     Adornment="Adornment.Start"
-                                     AdornmentText="Q"
-                                     Min="0"
-                                     HelperText="Monto al cerrar la caja" />
+                    <MudTextField Label="Monto Actual de Caja"
+                                  Value="@($"Q{aperturaCaja.TotalCaja?.ToString("F2") ?? "0.00"}")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  HelperText="Este será el monto de cierre" />
                 </MudItem>
 
                 <MudItem xs="12" md="6">
@@ -173,7 +171,7 @@
                                Color="Color.Warning"
                                StartIcon="@Icons.Material.Filled.Lock"
                                OnClick="CerrarCaja"
-                               Disabled="@(isSubmitting || !montoCierre.HasValue)"
+                               Disabled="@isSubmitting"
                                Class="mt-2">
                         Cerrar Caja
                     </MudButton>
@@ -260,7 +258,6 @@
                     aperturaForm.IdPersona = aperturaCaja.IdPersona;
                     aperturaForm.MontoApertura = aperturaCaja.MontoApertura;
                     aperturaForm.Observaciones = aperturaCaja.Observaciones;
-
                     // Convertir fecha
                     if (aperturaCaja.FechaApertura.HasValue)
                     {
@@ -356,15 +353,9 @@
 
     private async Task CerrarCaja()
     {
-        if (!montoCierre.HasValue)
-        {
-            Snackbar.Add("Debe ingresar el monto de cierre", Severity.Warning);
-            return;
-        }
-
         var dialog = await DialogService.ShowMessageBox(
             "Confirmar cierre de caja",
-            $"¿Está seguro que desea cerrar la caja con un monto de Q{montoCierre.Value:F2}?",
+            $"¿Está seguro que desea cerrar la caja? El monto de cierre será el total actual de Q{aperturaCaja.TotalCaja:F2}",
             yesText: "Cerrar Caja",
             cancelText: "Cancelar");
 
@@ -377,7 +368,6 @@
 
                 var result = await AperturaCajaServices.CerrarAperturaAsync(
                     IdAperturaCaja.Value,
-                    montoCierre.Value,
                     observacionesCierre);
 
                 if (result)

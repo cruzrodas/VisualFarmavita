@@ -23,6 +23,8 @@ public partial class AperturaCaja
 
     public string? Observaciones { get; set; }
 
+    public double? TotalCaja { get; set; }
+
     public virtual ICollection<Factura> Factura { get; set; } = new List<Factura>();
 
     public virtual Caja? IdCajaNavigation { get; set; }
