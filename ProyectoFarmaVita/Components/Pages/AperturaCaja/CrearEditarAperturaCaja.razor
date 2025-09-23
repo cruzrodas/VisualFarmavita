@@ -332,14 +332,25 @@
             // Obtener cajas activas
             var cajasActivas = await CajaServices.GetActivasAsync();
 
-            // Filtrar cajas que no tengan apertura activa
+            // Obtener el status de aperturas por caja
+            var aperturasStatus = await AperturaCajaServices.GetAperturasStatusByCajaAsync();
+
             cajasDisponibles = new List<Caja>();
 
             foreach (var caja in cajasActivas)
             {
-                var tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(caja.IdCaja);
-                if (!tieneAperturaActiva)
+                // Verificar si la caja tiene apertura activa
+                if (aperturasStatus.ContainsKey(caja.IdCaja))
                 {
+                    var status = aperturasStatus[caja.IdCaja];
+                    if (!status.TieneAperturaActiva)
+                    {
+                        cajasDisponibles.Add(caja);
+                    }
+                }
+                else
+                {
+                    // Si no aparece en el diccionario, significa que nunca ha tenido aperturas
                     cajasDisponibles.Add(caja);
                 }
             }
@@ -347,6 +358,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error al cargar cajas disponibles: {ex.Message}");
+            Snackbar.Add($"Error al cargar cajas disponibles: {ex.Message}", Severity.Warning);
             cajasDisponibles = new List<Caja>();
         }
     }
@@ -399,17 +411,6 @@
 
         try
         {
-            // Validar que la caja no tenga apertura activa (solo para nuevas aperturas)
-            if (!IdAperturaCaja.HasValue && aperturaForm.IdCaja.HasValue)
-            {
-                var tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(aperturaForm.IdCaja.Value);
-                if (tieneAperturaActiva)
-                {
-                    Snackbar.Add("La caja seleccionada ya tiene una apertura activa", Severity.Warning);
-                    return;
-                }
-            }
-
             // Mapear datos del formulario al modelo
             if (IdAperturaCaja.HasValue)
             {
@@ -427,6 +428,14 @@
                 aperturaCaja.FechaApertura = fechaAperturaDateTime.Value;
             }
 
+            // VALIDACIÓN ROBUSTA: Usar el nuevo método de validación
+            var (isValid, errorMessage) = await AperturaCajaServices.ValidateAperturaAsync(aperturaCaja);
+            if (!isValid)
+            {
+                Snackbar.Add(errorMessage, Severity.Warning);
+                return;
+            }
+
             var result = await AperturaCajaServices.AddUpdateAsync(aperturaCaja);
 
             if (result)
@@ -440,15 +449,41 @@
                 Snackbar.Add("Error al guardar la apertura de caja", Severity.Error);
             }
         }
+        catch (InvalidOperationException ex)
+        {
+            // Manejar errores de negocio específicos
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"💥 Error en HandleSubmit: {ex.Message}");
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error inesperado: {ex.Message}", Severity.Error);
         }
         finally
         {
             isSubmitting = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task OnCajaChanged(int? idCaja)
+    {
+        if (idCaja.HasValue && !IdAperturaCaja.HasValue) // Solo para nuevas aperturas
+        {
+            try
+            {
+                var tieneAperturaActiva = await AperturaCajaServices.TieneCajaAbiertaAsync(idCaja.Value);
+                if (tieneAperturaActiva)
+                {
+                    aperturaForm.IdCaja = null; // Limpiar la selección
+                    Snackbar.Add("La caja seleccionada ya tiene una apertura activa. Por favor, seleccione otra caja.", Severity.Warning);
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al validar caja: {ex.Message}");
+            }
         }
     }
 }

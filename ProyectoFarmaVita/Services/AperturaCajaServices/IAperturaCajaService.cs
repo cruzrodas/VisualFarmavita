@@ -1,4 +1,5 @@
 ﻿using ProyectoFarmaVita.Models;
+using static ProyectoFarmaVita.Services.AperturaCajaServices.AperturaCajaService;
 
 namespace ProyectoFarmaVita.Services.AperturaCajaServices
 {
@@ -15,5 +16,7 @@ namespace ProyectoFarmaVita.Services.AperturaCajaServices
         Task<bool> CerrarAperturaAsync(int idAperturaCaja, string observaciones = null);
         Task<bool> TieneCajaAbiertaAsync(int idCaja);
         Task<List<AperturaCaja>> GetAperturasActivasAsync();
+        Task<(bool IsValid, string ErrorMessage)> ValidateAperturaAsync(AperturaCaja aperturaCaja);
+        Task<Dictionary<int, AperturaStatusInfo>> GetAperturasStatusByCajaAsync();
     }
 }
