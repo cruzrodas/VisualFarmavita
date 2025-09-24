@@ -517,6 +517,7 @@
     private bool loadingProductos = false;
     private string busquedaProducto = "";
 
+
     // Variables para la venta
     private int idPersonaVenta = 0;
 
@@ -598,14 +599,29 @@
         try
         {
             loadingProductos = true;
-            // Cargar productos disponibles sin validar inventario específico
+
+            // 🔧 OBTENER EL INVENTARIO CORRECTO DEL USUARIO LOGUEADO
+            var inventarioDelUsuario = await VentaServices.ObtenerInventarioAsignadoAsync(idPersonaVenta);
+
+            if (inventarioDelUsuario == null)
+            {
+                Snackbar.Add("Error: No tienes inventario asignado para realizar ventas", Severity.Error);
+                productosDisponibles = new List<InventarioProducto>();
+                return;
+            }
+
+            // Cargar productos del inventario CORRECTO
             productosDisponibles = await VentaServices.ObtenerProductosDisponiblesAsync(
-                1, busquedaProducto); // Usar inventario genérico o el primero disponible
+                inventarioDelUsuario.IdInventario, busquedaProducto);
+
+            Console.WriteLine($"🔍 DEBUG: Cargando productos del inventario ID: {inventarioDelUsuario.IdInventario} ({inventarioDelUsuario.NombreInventario})");
+            Console.WriteLine($"📦 Total productos disponibles: {productosDisponibles?.Count ?? 0}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error al cargar productos: {ex.Message}");
             Snackbar.Add("Error al cargar productos", Severity.Error);
+            productosDisponibles = new List<InventarioProducto>();
         }
         finally
         {
@@ -714,107 +730,6 @@
         StateHasChanged();
     }
 
-    // private async Task HandleSubmit()
-    // {
-    //     try
-    //     {
-    //         if (!productosVenta.Any())
-    //         {
-    //             Snackbar.Add("Debe agregar al menos un producto", Severity.Warning);
-    //             return;
-    //         }
-
-    //         isSubmitting = true;
-    //         StateHasChanged();
-
-    //         // Obtener la apertura de caja activa del usuario logueado
-    //         var aperturaUsuario = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
-    //         if (aperturaUsuario == null)
-    //         {
-    //             Snackbar.Add("No tiene una apertura de caja activa. Debe abrir caja antes de realizar ventas.", Severity.Error);
-    //             isSubmitting = false;
-    //             StateHasChanged();
-    //             return;
-    //         }
-
-    //         // Crear modelo de venta
-    //         var ventaModel = new VentaModel
-    //         {
-    //             IdPersona = idPersonaVenta,
-    //             IdAperturaCaja = aperturaUsuario.IdAperturaCaja,
-    //             IdCliente = ventaForm.IdCliente,
-    //             IdTipoPago = ventaForm.IdTipoPago,
-    //             SubTotal = subtotalVenta,
-    //             Impuestos = impuestosVenta,
-    //             Descuento = descuentoVenta,
-    //             Total = totalVenta,
-    //             Observaciones = ventaForm.Observaciones,
-    //             Detalles = productosVenta.Select(p => new VentaDetalleModel
-    //             {
-    //                 IdProducto = p.IdProducto,
-    //                 Cantidad = p.Cantidad,
-    //                 PrecioUnitario = p.PrecioUnitario,
-    //                 SubTotal = p.Cantidad * p.PrecioUnitario,
-    //                 Impuesto = (p.Cantidad * p.PrecioUnitario) * 0.12,
-    //                 Descuento = 0,
-    //                 Total = (p.Cantidad * p.PrecioUnitario) + ((p.Cantidad * p.PrecioUnitario) * 0.12)
-    //             }).ToList()
-    //         };
-
-    //         // Procesar la venta directamente
-    //         var idFactura = await VentaServices.CrearFacturaAsync(ventaModel);
-
-    //         if (idFactura > 0)
-    //         {
-    //             // Actualizar inventario
-    //             var inventarioActualizado = await VentaServices.ActualizarInventarioAsync(
-    //                 ventaModel.Detalles, 1); // Usar inventario por defecto
-
-    //             if (inventarioActualizado)
-    //             {
-    //                 // Actualizar caja (opcional)
-    //                 await VentaServices.ActualizarCajaAsync(1, totalVenta);
-
-    //                 Snackbar.Add($"Venta procesada exitosamente. Factura #{idFactura}", Severity.Success);
-
-    //                 // Preguntar si desea imprimir o ver la factura
-    //                 var result = await DialogService.ShowMessageBox(
-    //                     "Venta Exitosa",
-    //                     $"Venta procesada correctamente.\nFactura #{idFactura}\nTotal: Q{totalVenta:F2}\n\n¿Desea ver los detalles de la factura?",
-    //                     yesText: "Ver Factura",
-    //                     cancelText: "Nueva Venta");
-
-    //                 if (result == true)
-    //                 {
-    //                     NavigationManager.NavigateTo($"/ventas/factura/{idFactura}");
-    //                 }
-    //                 else
-    //                 {
-    //                     // Limpiar formulario para nueva venta
-    //                     LimpiarFormulario();
-    //                 }
-    //             }
-    //             else
-    //             {
-    //                 Snackbar.Add("Error al actualizar el inventario", Severity.Error);
-    //             }
-    //         }
-    //         else
-    //         {
-    //             Snackbar.Add("Error al procesar la venta", Severity.Error);
-    //         }
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         Console.WriteLine($"Error al procesar venta: {ex.Message}");
-    //         Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-    //     }
-    //     finally
-    //     {
-    //         isSubmitting = false;
-    //         StateHasChanged();
-    //     }
-    // }
 
     private async Task HandleSubmit()
     {
