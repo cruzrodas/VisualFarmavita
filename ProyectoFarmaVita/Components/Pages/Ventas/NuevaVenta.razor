@@ -33,6 +33,92 @@
                 </MudStack>
             </MudPaper>
 
+            <!-- COMPONENTE - INFORMACIÓN DE CAJA -->
+            <MudCard Elevation="3" Class="mb-4 rounded-lg caja-status-card">
+                <MudCardContent Class="pa-4">
+                    <MudGrid AlignItems="AlignItems.Center" Spacing="2">
+                        <MudItem xs="12" sm="8" md="9">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.PointOfSale" />
+
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">
+                                        Estado de Caja
+                                    </MudText>
+
+                                    @if (validandoCaja)
+                                    {
+                                        <div class="d-flex align-center">
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">Validando caja...</MudText>
+                                        </div>
+                                    }
+                                    else if (cajaValida && aperturaActiva != null)
+                                    {
+                                        <MudText Typo="Typo.body1" Color="Color.Success" Style="font-weight: 500;">
+                                            ✓ @aperturaActiva.IdCajaNavigation?.NombreCaja
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Apertura: @aperturaActiva.FechaApertura?.ToString("dd/MM/yyyy HH:mm")
+                                            - Monto inicial: Q@(aperturaActiva.MontoApertura?.ToString("F2") ?? "0.00")
+                                        </MudText>
+                                        @if (aperturaActiva.IdPersonaNavigation != null)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                Responsable: @aperturaActiva.IdPersonaNavigation.Nombre @aperturaActiva.IdPersonaNavigation.Apellido
+                                            </MudText>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body1" Color="Color.Error">
+                                            ✗ Sin apertura de caja activa
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Debes abrir una caja antes de realizar ventas
+                                        </MudText>
+                                    }
+                                </MudStack>
+                            </MudStack>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="4" md="3" Class="text-sm-right">
+                            <MudStack Spacing="2">
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Refresh"
+                                           Size="Size.Small"
+                                           OnClick="RefrescarEstadoCaja"
+                                           Disabled="@validandoCaja">
+                                    Actualizar
+                                </MudButton>
+
+                                @if (!cajaValida)
+                                {
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Warning"
+                                               StartIcon="@Icons.Material.Filled.Add"
+                                               Size="Size.Small"
+                                               OnClick="@(() => NavigationManager.NavigateTo("/cajas/apertura"))"
+                                               FullWidth="true">
+                                        Abrir Caja
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+
+                    @if (!cajaValida)
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
+                            <MudText Typo="Typo.body2">
+                                <strong>Importante:</strong> No podrás procesar ventas hasta que tengas una caja abierta.
+                            </MudText>
+                        </MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+
             <!-- Formulario de Venta -->
             <EditForm Model="ventaForm" OnValidSubmit="HandleSubmit">
                 <DataAnnotationsValidator />
@@ -234,7 +320,7 @@
                                    Variant="Variant.Filled"
                                    Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.PointOfSale"
-                                   Disabled="@(isSubmitting || !productosVenta.Any() || ventaForm.IdTipoPago == 0)"
+                                   Disabled="@(isSubmitting || !productosVenta.Any() || ventaForm.IdTipoPago == 0 || !cajaValida)"
                                    Size="Size.Large"
                                    Class="flex-2">
                             @if (isSubmitting)
@@ -244,7 +330,8 @@
                             }
                             else
                             {
-                                <MudText>Procesar Venta - Q@totalVenta.ToString("F2")</MudText>
+                                <MudText>Procesar Venta - Q@(totalVenta.ToString("F2"))
+</MudText>
                             }
                         </MudButton>
                     </MudStack>
@@ -306,7 +393,7 @@
                                         <MudStack Spacing="1" AlignItems="AlignItems.Center">
                                             <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Primary" />
                                             <MudText Typo="Typo.h4" Color="Color.Primary">
-                                                Q@totalVenta.ToString("F2")
+                                                Q@(totalVenta.ToString("F2"))
                                             </MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">Total a Pagar</MudText>
                                         </MudStack>
@@ -342,7 +429,7 @@
                                                             @producto.NombreProducto
                                                         </MudText>
                                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                            Q@producto.PrecioUnitario.ToString("F2") c/u
+                                                            Q@(producto.PrecioUnitario.ToString("F2")) c/u
                                                         </MudText>
                                                     </MudStack>
 
@@ -375,7 +462,7 @@
                                                         <MudStack Spacing="0">
                                                             <MudText Typo="Typo.caption" Color="Color.Secondary">Subtotal</MudText>
                                                             <MudText Typo="Typo.h6" Color="Color.Primary">
-                                                                Q@(producto.Cantidad* producto.PrecioUnitario).ToString("F2")
+                                                                Q@((producto.Cantidad * producto.PrecioUnitario).ToString("F2"))
                                                             </MudText>
                                                         </MudStack>
                                                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
@@ -399,20 +486,20 @@
                                 <MudStack Spacing="2">
                                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.body2">Subtotal:</MudText>
-                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@subtotalVenta.ToString("F2")</MudText>
+                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@(subtotalVenta.ToString("F2"))</MudText>
                                     </MudStack>
                                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.body2">Impuestos (12%):</MudText>
-                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@impuestosVenta.ToString("F2")</MudText>
+                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@(impuestosVenta.ToString("F2"))</MudText>
                                     </MudStack>
                                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.body2">Descuento:</MudText>
-                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@descuentoVenta.ToString("F2")</MudText>
+                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">Q@(descuentoVenta.ToString("F2"))</MudText>
                                     </MudStack>
                                     <MudDivider />
                                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.h6" Color="Color.Primary">TOTAL:</MudText>
-                                        <MudText Typo="Typo.h5" Color="Color.Primary" Style="font-weight: 600;">Q@totalVenta.ToString("F2")</MudText>
+                                        <MudText Typo="Typo.h5" Color="Color.Primary" Style="font-weight: 600;">Q@(totalVenta.ToString("F2"))</MudText>
                                     </MudStack>
                                 </MudStack>
                             </MudCardContent>
@@ -426,6 +513,26 @@
 
 <!-- Estilos CSS -->
 <style>
+    .caja-status-card {
+        background: linear-gradient(135deg, var(--mud-palette-info-lighten) 0%, var(--mud-palette-background) 100%);
+        border-left: 6px solid var(--mud-palette-info);
+        border-radius: 12px;
+    }
+
+        .caja-status-card .mud-card-content {
+            padding: 16px !important;
+        }
+
+    @@media (max-width: 599px) {
+        .caja-status-card .text-sm-right
+
+    {
+        text-align: left !important;
+        margin-top: 8px;
+    }
+
+    }
+
     .sidebar-sticky {
         position: sticky;
         top: 20px;
@@ -433,10 +540,13 @@
     }
 
     @@media (max-width: 1279px) {
-        .sidebar-sticky {
-            position: relative;
-            top: auto;
-        }
+        .sidebar-sticky
+
+    {
+        position: relative;
+        top: auto;
+    }
+
     }
 
     .rounded-lg {
@@ -516,7 +626,10 @@
     private bool isSubmitting = false;
     private bool loadingProductos = false;
     private string busquedaProducto = "";
-
+    private AperturaCaja? aperturaActiva = null;
+    private bool validandoCaja = false;
+    private bool cajaValida = false;
+    private string mensajeCaja = "";
 
     // Variables para la venta
     private int idPersonaVenta = 0;
@@ -560,12 +673,13 @@
 
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
             {
-                // Si se pasa IdPersona como parámetro, usarlo, sino usar el usuario logueado
                 idPersonaVenta = IdPersona ?? userId;
+
+                // Validación de caja
+                await ValidarYCargarCajaActiva();
             }
             else
             {
-                // Si no se puede obtener el usuario logueado, mostrar error
                 Snackbar.Add("Error: No se pudo obtener el usuario logueado", Severity.Error);
                 NavigationManager.NavigateTo("/login");
                 return;
@@ -577,6 +691,49 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Error al inicializar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ValidarYCargarCajaActiva()
+    {
+        try
+        {
+            validandoCaja = true;
+            StateHasChanged();
+
+            // Obtener apertura de caja activa
+            aperturaActiva = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
+
+            if (aperturaActiva != null)
+            {
+                cajaValida = true;
+                mensajeCaja = $"Caja: {aperturaActiva.IdCajaNavigation?.NombreCaja} - Apertura: {aperturaActiva.FechaApertura?.ToString("dd/MM/yyyy HH:mm")}";
+            }
+            else
+            {
+                cajaValida = false;
+                mensajeCaja = "No tienes una apertura de caja activa. Debes abrir caja antes de realizar ventas.";
+            }
+        }
+        catch (Exception ex)
+        {
+            cajaValida = false;
+            mensajeCaja = $"Error al validar caja: {ex.Message}";
+            Console.WriteLine($"Error al validar caja: {ex.Message}");
+        }
+        finally
+        {
+            validandoCaja = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefrescarEstadoCaja()
+    {
+        await ValidarYCargarCajaActiva();
+        if (cajaValida)
+        {
+            Snackbar.Add("Estado de caja actualizado", Severity.Success);
         }
     }
 
@@ -600,7 +757,7 @@
         {
             loadingProductos = true;
 
-            // 🔧 OBTENER EL INVENTARIO CORRECTO DEL USUARIO LOGUEADO
+            // Obtener el inventario correcto del usuario logueado
             var inventarioDelUsuario = await VentaServices.ObtenerInventarioAsignadoAsync(idPersonaVenta);
 
             if (inventarioDelUsuario == null)
@@ -610,12 +767,12 @@
                 return;
             }
 
-            // Cargar productos del inventario CORRECTO
+            // Cargar productos del inventario correcto
             productosDisponibles = await VentaServices.ObtenerProductosDisponiblesAsync(
                 inventarioDelUsuario.IdInventario, busquedaProducto);
 
-            Console.WriteLine($"🔍 DEBUG: Cargando productos del inventario ID: {inventarioDelUsuario.IdInventario} ({inventarioDelUsuario.NombreInventario})");
-            Console.WriteLine($"📦 Total productos disponibles: {productosDisponibles?.Count ?? 0}");
+            Console.WriteLine($"DEBUG: Cargando productos del inventario ID: {inventarioDelUsuario.IdInventario} ({inventarioDelUsuario.NombreInventario})");
+            Console.WriteLine($"Total productos disponibles: {productosDisponibles?.Count ?? 0}");
         }
         catch (Exception ex)
         {
@@ -729,7 +886,6 @@
         Snackbar.Add("Carrito limpiado", Severity.Info);
         StateHasChanged();
     }
-
 
     private async Task HandleSubmit()
     {
