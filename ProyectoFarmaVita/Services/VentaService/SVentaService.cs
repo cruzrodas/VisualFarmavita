@@ -379,6 +379,7 @@ namespace ProyectoFarmaVita.Services.VentaService
 
         #region OPERACIONES DE VENTA
 
+
         public async Task<int> CrearFacturaAsync(VentaModel ventaModel)
         {
             var strategy = _contextFactory.CreateDbContext().Database.CreateExecutionStrategy();
@@ -432,18 +433,56 @@ namespace ProyectoFarmaVita.Services.VentaService
                     }
 
                     await context.SaveChangesAsync();
+
+                    // ✅ Actualizar inventario (usando el método que ya funciona en tu sistema)
+                    var inventario = await ObtenerInventarioAsignadoAsync(ventaModel.IdPersona);
+                    if (inventario == null)
+                    {
+                        throw new InvalidOperationException("No se encontró inventario asignado para realizar la venta");
+                    }
+
+                    var inventarioActualizado = await ActualizarInventarioAsync(ventaModel.Detalles, inventario.IdInventario);
+                    if (!inventarioActualizado)
+                    {
+                        throw new InvalidOperationException("Error al actualizar el inventario");
+                    }
+
+                    // 🔥 NUEVA FUNCIONALIDAD: Actualizar el total de la caja
+                    var cajaActualizada = await ActualizarCajaAsync(ventaModel.IdAperturaCaja, ventaModel.Total);
+                    if (!cajaActualizada)
+                    {
+                        throw new InvalidOperationException("Error al actualizar el total de la caja");
+                    }
+
                     await transaction.CommitAsync();
 
-                    _logger.LogInformation($"Factura {factura.NumeroFactura} creada exitosamente");
+                    _logger.LogInformation($"✅ Factura {factura.NumeroFactura} creada exitosamente - Total: Q{ventaModel.Total:F2}");
                     return factura.IdFactura;
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error creando factura");
+                    _logger.LogError(ex, "❌ Error creando factura");
                     throw;
                 }
             });
+        }
+
+        private async Task<int> ObtenerIdInventarioActivoAsync(FarmaDbContext context, int idPersona)
+        {
+            // Obtener inventario a través de JOIN: Persona → Sucursal → Inventario
+            var inventario = await (from p in context.Persona
+                                    join s in context.Sucursal on p.IdSucursal equals s.IdSucursal
+                                    where p.IdPersona == idPersona && p.Activo == true
+                                    select s.IdInventario)
+                                   .FirstOrDefaultAsync();
+
+            if (inventario == null || inventario == 0)
+            {
+                throw new InvalidOperationException($"No se encontró inventario activo para la persona {idPersona}. Verifica que tenga una sucursal asignada con inventario.");
+            }
+
+            return inventario.Value;
         }
 
         public async Task<bool> ActualizarInventarioAsync(List<VentaDetalleModel> detalles, int idInventario)
@@ -492,6 +531,7 @@ namespace ProyectoFarmaVita.Services.VentaService
             });
         }
 
+
         public async Task<bool> ActualizarCajaAsync(int idAperturaCaja, double montoVenta)
         {
             try
@@ -499,22 +539,33 @@ namespace ProyectoFarmaVita.Services.VentaService
                 using var context = _contextFactory.CreateDbContext();
 
                 var aperturaCaja = await context.AperturaCaja
-                    .FirstOrDefaultAsync(a => a.IdAperturaCaja == idAperturaCaja);
+                    .FirstOrDefaultAsync(a => a.IdAperturaCaja == idAperturaCaja && a.Activa == true);
 
                 if (aperturaCaja != null)
                 {
-                    _logger.LogInformation($"Venta de Q{montoVenta:F2} registrada en caja {idAperturaCaja}");
+                    // ✅ AQUÍ ESTÁ LA CORRECCIÓN: Sumar al TotalCaja actual
+                    var totalAnterior = aperturaCaja.TotalCaja ?? 0;
+                    aperturaCaja.TotalCaja = totalAnterior + montoVenta;
+
+                    // Actualizar en la base de datos
+                    context.AperturaCaja.Update(aperturaCaja);
+                    await context.SaveChangesAsync();
+
+                    _logger.LogInformation($"✅ Caja actualizada - ID: {idAperturaCaja}, Total anterior: Q{totalAnterior:F2}, Venta: Q{montoVenta:F2}, Nuevo total: Q{aperturaCaja.TotalCaja:F2}");
+
                     return true;
                 }
 
+                _logger.LogWarning($"⚠️ No se encontró apertura de caja activa con ID: {idAperturaCaja}");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error actualizando caja {idAperturaCaja}");
+                _logger.LogError(ex, $"❌ Error actualizando caja {idAperturaCaja} con monto {montoVenta:F2}");
                 return false;
             }
         }
+
 
         public async Task<bool> AnularFacturaAsync(int idFactura, string motivo)
         {
@@ -529,6 +580,7 @@ namespace ProyectoFarmaVita.Services.VentaService
                 {
                     var factura = await context.Factura
                         .Include(f => f.FacturaDetalle)
+                        .Include(f => f.IdAperturaCajaNavigation) // Incluir apertura de caja
                         .FirstOrDefaultAsync(f => f.IdFactura == idFactura);
 
                     if (factura == null)
@@ -543,6 +595,18 @@ namespace ProyectoFarmaVita.Services.VentaService
                         factura.IdEstado = estadoAnulado.IdEstado;
                         factura.Observaciones = $"{factura.Observaciones} | ANULADO: {motivo}";
                         context.Factura.Update(factura);
+                    }
+
+                    // 🔥 NUEVA FUNCIONALIDAD: Restar el total de la caja si está activa
+                    if (factura.IdAperturaCajaNavigation != null &&
+                        factura.IdAperturaCajaNavigation.Activa == true)
+                    {
+                        var totalAnterior = factura.IdAperturaCajaNavigation.TotalCaja ?? 0;
+                        factura.IdAperturaCajaNavigation.TotalCaja = totalAnterior - (factura.Total ?? 0);
+
+                        context.AperturaCaja.Update(factura.IdAperturaCajaNavigation);
+
+                        _logger.LogInformation($"🔄 Caja actualizada por anulación - Total anterior: Q{totalAnterior:F2}, Factura anulada: Q{factura.Total:F2}, Nuevo total: Q{factura.IdAperturaCajaNavigation.TotalCaja:F2}");
                     }
 
                     // Restaurar inventario
@@ -561,13 +625,13 @@ namespace ProyectoFarmaVita.Services.VentaService
                     await context.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    _logger.LogInformation($"Factura {idFactura} anulada: {motivo}");
+                    _logger.LogInformation($"✅ Factura {idFactura} anulada: {motivo}");
                     return true;
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, $"Error anulando factura {idFactura}");
+                    _logger.LogError(ex, $"❌ Error anulando factura {idFactura}");
                     return false;
                 }
             });
