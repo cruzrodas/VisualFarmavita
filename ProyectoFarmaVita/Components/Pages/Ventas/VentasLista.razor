@@ -213,6 +213,12 @@
                                        Title="Imprimir factura"
                                        OnClick="@(() => ImprimirFactura(context.IdFactura))" />
 
+                        <MudIconButton Icon="@Icons.Material.Filled.Receipt"
+                                       Color="Color.Success"
+                                       Size="Size.Small"
+                                       Title="Ver factura completa"
+                                       OnClick="@(() => VerFacturaCompleta(context.IdFactura))" />
+
                         @{
                             var esAnulada = context.IdEstadoNavigation?.Estado1?.ToLower().Contains("anulado") == true;
                         }
@@ -367,8 +373,6 @@
 
     private async Task VerEstadisticasHoy()
     {
-        // Para obtener estadísticas necesitamos un ID de persona
-        // Por simplicidad, mostraremos las estadísticas generales del día
         try
         {
             var hoy = DateTime.Today;
@@ -489,5 +493,10 @@
         {
             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
+    }
+
+    private void VerFacturaCompleta(int idFactura)
+    {
+        NavigationManager.NavigateTo($"/ventas/factura/{idFactura}");
     }
 }

@@ -821,6 +821,59 @@ namespace ProyectoFarmaVita.Services.VentaService
 
         #endregion
 
+
+        public async Task<(bool esValida, string mensaje)> ValidarAperturaCajaVsSucursalUsuarioAsync(int idPersona)
+        {
+            try
+            {
+                using var context = _contextFactory.CreateDbContext();
+
+                // 1. Obtener la persona y su sucursal asignada
+                var persona = await context.Persona
+                    .FirstOrDefaultAsync(p => p.IdPersona == idPersona);
+
+                if (persona?.IdSucursal == null)
+                {
+                    return (false, "El usuario no tiene sucursal asignada");
+                }
+
+                // 2. Obtener la apertura de caja activa del usuario
+                var aperturaActiva = await context.AperturaCaja
+                    .Include(a => a.IdCajaNavigation)
+                    .FirstOrDefaultAsync(a => a.IdPersona == idPersona &&
+                                           a.Activa == true &&
+                                           a.FechaCierre == null);
+
+                if (aperturaActiva == null)
+                {
+                    return (false, "No tienes una apertura de caja activa");
+                }
+
+                // 3. VALIDACIÓN CLAVE: Verificar que la caja de la apertura pertenezca a la misma sucursal del usuario
+                if (aperturaActiva.IdCajaNavigation?.IdSucursal != persona.IdSucursal)
+                {
+                    return (false, $"Error de seguridad: La apertura de caja activa pertenece a la sucursal '{aperturaActiva.IdCajaNavigation?.IdSucursalNavigation?.NombreSucursal}' pero tu usuario está asignado a otra sucursal. No puedes usar esta apertura de caja.");
+                }
+
+                // 4. Validar que el inventario de la sucursal existe
+                var sucursal = await context.Sucursal
+                    .Include(s => s.IdInventarioNavigation)
+                    .FirstOrDefaultAsync(s => s.IdSucursal == persona.IdSucursal);
+
+                if (sucursal?.IdInventarioNavigation == null)
+                {
+                    return (false, "La sucursal no tiene inventario asignado");
+                }
+
+                return (true, "Validación exitosa");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error validando apertura vs sucursal para usuario {idPersona}");
+                return (false, "Error interno en la validación");
+            }
+        }
+
         #region MÉTODOS DE DIAGNÓSTICO
 
         public async Task<Dictionary<string, object>> DiagnosticarEstadoCajasAsync(int idPersona)

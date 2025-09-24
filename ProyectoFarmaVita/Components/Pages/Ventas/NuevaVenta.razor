@@ -694,6 +694,8 @@
         }
     }
 
+
+    // ✅ OPCIÓN 1: Sin logger (Más simple)
     private async Task ValidarYCargarCajaActiva()
     {
         try
@@ -701,25 +703,33 @@
             validandoCaja = true;
             StateHasChanged();
 
-            // Obtener apertura de caja activa
-            aperturaActiva = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
+            // Usar la nueva validación integral
+            var (esValida, mensaje) = await VentaServices.ValidarAperturaCajaVsSucursalUsuarioAsync(idPersonaVenta);
 
-            if (aperturaActiva != null)
+            if (esValida)
             {
+                // Obtener la apertura válida
+                aperturaActiva = await VentaServices.ObtenerAperturaCajaActivaPorPersonaAsync(idPersonaVenta);
                 cajaValida = true;
                 mensajeCaja = $"Caja: {aperturaActiva.IdCajaNavigation?.NombreCaja} - Apertura: {aperturaActiva.FechaApertura?.ToString("dd/MM/yyyy HH:mm")}";
             }
             else
             {
                 cajaValida = false;
-                mensajeCaja = "No tienes una apertura de caja activa. Debes abrir caja antes de realizar ventas.";
+                mensajeCaja = mensaje;
+                aperturaActiva = null;
             }
         }
         catch (Exception ex)
         {
             cajaValida = false;
-            mensajeCaja = $"Error al validar caja: {ex.Message}";
-            Console.WriteLine($"Error al validar caja: {ex.Message}");
+            mensajeCaja = "Error al validar la apertura de caja";
+
+            // ✅ Usar Console.WriteLine en lugar de logger
+            Console.WriteLine($"Error en validación de caja: {ex.Message}");
+
+            // ✅ Opcional: Mostrar mensaje de error al usuario
+            Snackbar.Add("Error interno al validar la caja. Contacte al administrador.", Severity.Error);
         }
         finally
         {

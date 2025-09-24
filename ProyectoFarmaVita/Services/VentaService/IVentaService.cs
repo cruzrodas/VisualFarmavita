@@ -33,6 +33,8 @@ namespace ProyectoFarmaVita.Services.VentaService
         Task<List<dynamic>> ObtenerProductosMasVendidosAsync(int idInventario, DateTime fechaInicio, DateTime fechaFin);
 
         Task<AperturaCaja?> ObtenerAperturaCajaActivaPorPersonaAsync(int idPersona);
+
+        Task<(bool esValida, string mensaje)> ValidarAperturaCajaVsSucursalUsuarioAsync(int idPersona);
     }
 
     // MODELOS PARA EL SERVICIO
