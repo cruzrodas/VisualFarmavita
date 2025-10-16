@@ -6,6 +6,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
@@ -23,6 +24,12 @@
 							   OnClick="@(() => NavigationManager.NavigateTo("/personas/crear"))"
 							   Class="new-person-button">
 						Nueva Persona
+					</MudButton>
+					<MudButton Color="Color.Primary"
+							   StartIcon="@Icons.Material.Filled.Print"
+							   OnClick="@PrintTable"
+							   Class="new-person-button">
+						Imprimir
 					</MudButton>
 				</MudButtonGroup>
 			</MudItem>
@@ -1069,6 +1076,29 @@
 			_cancellationTokenSource?.Cancel();
 			_cancellationTokenSource?.Dispose();
 			_loadingSemaphore?.Dispose();
+		}
+	}
+
+	private async Task PrintTable()
+	{
+		try
+		{
+			await JSRuntime.InvokeVoidAsync("printTable",
+				".custom-table",  // Selector de la tabla
+				"Gestión de Personas - FarmaVita",  // Título
+				new
+				{
+					orientacion = "landscape",
+					tamanoFuente = "9px",
+					colorEncabezado = "#03346c",
+					excluirColumnas = new[] { "Acciones" }
+				}
+			);
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error al imprimir: {ex.Message}");
+			Snackbar.Add("Error al imprimir la tabla", Severity.Error);
 		}
 	}
 }

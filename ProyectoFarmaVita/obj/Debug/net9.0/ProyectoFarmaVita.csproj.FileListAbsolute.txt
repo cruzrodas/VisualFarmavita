@@ -540,3 +540,4 @@ C:\Users\Bryan\OneDrive\Desktop\Proyectos Finales\ProyectoFarmaVita\ProyectoFarm
 C:\Users\Bryan\OneDrive\Desktop\Proyectos Finales\ProyectoFarmaVita\ProyectoFarmaVita\ProyectoFarmaVita\obj\Debug\net9.0\ProyectoFarmaVita.pdb
 C:\Users\Bryan\OneDrive\Desktop\Proyectos Finales\ProyectoFarmaVita\ProyectoFarmaVita\ProyectoFarmaVita\obj\Debug\net9.0\ProyectoFarmaVita.genruntimeconfig.cache
 C:\Users\Bryan\OneDrive\Desktop\Proyectos Finales\ProyectoFarmaVita\ProyectoFarmaVita\ProyectoFarmaVita\obj\Debug\net9.0\ref\ProyectoFarmaVita.dll
+C:\Users\Bryan\OneDrive\Desktop\Proyectos Finales\ProyectoFarmaVita\ProyectoFarmaVita\ProyectoFarmaVita\obj\Debug\net9.0\compressed\ru9p7u4mv1-gob4n08am5.gz
